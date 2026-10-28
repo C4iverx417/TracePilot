@@ -13,7 +13,8 @@ U01、U02 按旧流程交付了学习交接卡（见下方），予以保留。
 | U06 | 已验证 | BM25（自实现）+ 向量，RRF 融合；`Retriever` 接口；`--retrieval` 可切换基线；默认 top_k=8 |
 | U07 | 已验证 | `upgrade --from --to`：两版本分别检索、分组呈现；5 个人工筛选的真实 Issue（GitHub 角色 + 解决证据）；文档事实 / 历史案例分离；冲突机制；每文档最多 2 块 |
 | U08 | 已验证 | LangGraph 状态图：check_input → retrieve → assess →（补检索 / generate）→ finish；预算：3 轮检索、8 次调用、1 次格式修复、2 次瞬时重试、60 秒；`--trace` |
-| U09–U15 | 未开始 | |
+| U09 | 已验证 | `tracepilot chat`：内存会话；Session / Episode / Run；最多 2 轮澄清、每次 ≤3 个字段；显式版本优先；改版本即按新版本重新检索；会话隔离 |
+| U10–U15 | 未开始 | |
 
 ---
 
@@ -231,3 +232,11 @@ manifest.json + snapshot/*.md → load_snapshot (校验 SHA-256) → SourceDocum
 - **调试记录：** 候选池最初按分数合并，但 BM25 分数**跨查询不可比**，第一轮噪声的高分压过第二轮的正确结果；改为按“最佳排名，同排名取较新一轮”合并。
 - **验证：** 78 个测试通过：AT-08（首轮无关、改写后命中、3 次调用）、AT-09（3 轮上限、绝无第 4 轮）、改写与原查询相同时提前停止、一次格式修复成功 / 两次失败、429 退避重试（1s、2s）、重试上限、鉴权错误不重试、调用预算、截止时间（假时钟）。CLI 上 Django 问题：2 轮检索、3 次调用后结束，end_reason=retrieval_budget_exhausted。
 - **限制：** mock 的评估只看词覆盖率，真实模型的判断质量未验证；`upgrade` 仍走单次 RAG（未迁入图）；`--show-context` 使用单次 RAG 引擎。
+
+### U09 —— 用户能补充缺失信息后继续同一个问题（已验证）
+
+- **新增：** `models/sessions.py`（`Session`、`Episode`、`ConfirmedContext`、`Message`、`SessionStore` 接口 + `InMemorySessionStore`）；`models/conversation.py`（`ConversationService.submit / new_session / new_episode`、`extract_conditions`、`is_vague`、`compose_query`）；`tracepilot chat`（`/new`、`/version`、`/session`、`/newsession`、`/switch`）。
+- **规则：** 缺版本 → 问版本；问题含糊（短、含“失败 / 报错 / doesn't work”等）且没有错误原文 → 问错误原文；每次最多问 3 个字段，已确认的不重复问。澄清计数属于 **episode**，跨 run 累加；满 2 轮后不再追问：仍缺版本 → `insufficient_context` 并列出缺口；只缺错误原文 → 带提示尝试回答。只有 `/new`（新问题）或新会话会重置计数。优先级：显式选择（`--version` / `/version`）> 用户文字陈述 > 已有值；只有“pydantic 2.14 / 我用的是 1.10 / version 2.0”这类明确陈述算数，URL 或 traceback 里的版本号不算。
+- **上下文预算：** 工作流只收到 `compose_query` 生成的紧凑查询（原问题 + 错误原文 + 最近 2 条补充，去掉版本陈述，≤2000 字符），从不拼接完整对话历史。
+- **验证：** 88 个测试通过（AT-04 不猜版本、AT-05 两轮后停止、AT-12 改版本后证据全部来自新版本、AT-13 两个会话互不影响、显式选择优先、新问题重置计数但保留所选版本）。CLI 演示：“程序启动失败” → 问版本 + 错误原文 → “我用的是 2.14.1” → 只再问错误原文 → 贴错误 → 回答引用迁移指南并把 #6777 列为历史案例。
+- **限制：** 会话只在内存中，**退出进程即丢失**（U13 持久化）；条件提取与“含糊”判断是确定性规则，不用模型，覆盖面有限；环境字段已建模但尚未提取。

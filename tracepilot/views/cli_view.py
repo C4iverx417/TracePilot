@@ -181,3 +181,28 @@ def render_trace(trace) -> str:
         detail = ", ".join(f"{k}={v}" for k, v in event.items() if k not in ("node", "ms") and v is not None)
         lines.append(f"  {i:2}. {event['node']:<12} {event['ms']:>5} ms  {detail}")
     return "\n".join(lines)
+
+
+def render_turn(result) -> str:
+    """One chat turn: either the clarifying questions or the answer."""
+    head = f"[{result.status}]  session={result.session_id}  episode={result.episode_id}  run={result.run_id}"
+    if result.status == "failed":
+        return f"{head}\nerror [{result.error_code}]: {result.error}"
+    if result.status == "awaiting_input":
+        lines = [head, "", result.answer.draft.summary]
+        lines += [f"  ? {q}" for q in result.answer.draft.missing_information]
+        lines += [f"! {n}" for n in result.notes]
+        return "\n".join(lines)
+    return head + "\n\n" + render_answer(result.answer)
+
+
+def render_session(session) -> str:
+    ep = session.current
+    lines = [f"session {session.session_id}   retained version: {session.retained_version or '-'}",
+             f"episodes: {len(session.episodes)}   current: {ep.episode_id}",
+             f"  question: {ep.question or '-'}",
+             f"  confirmed: {ep.confirmed.as_dict()}",
+             f"  clarification rounds used: {ep.clarification_rounds}/2",
+             f"  version history: {ep.version_history or '-'}",
+             f"  runs: {len(ep.run_ids)}   messages: {len(ep.messages)}"]
+    return "\n".join(lines)

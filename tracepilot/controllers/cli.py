@@ -5,6 +5,7 @@
     tracepilot devcheck                  U02: run the labelled development questions
     tracepilot answer "question" --version 2.14.1   U03-U05: version-filtered retrieval + cited answer
     tracepilot upgrade "error" --from 1.10 --to 2.14  U07: per-version evidence, migration steps
+    tracepilot chat                                  U09: multi-turn diagnosis with clarification
 """
 
 from __future__ import annotations
@@ -176,6 +177,71 @@ def cmd_upgrade(args, settings: Settings) -> int:
                    lambda: pipeline.prepare_compare(question, before.version, after.version))
 
 
+CHAT_HELP = """Commands:
+  /new              start a new problem (resets clarification count, keeps your chosen version)
+  /version X        select a version for this and future problems, e.g. /version 2.14.1
+  /session          show what the system has confirmed so far
+  /newsession       open a second, independent session
+  /switch ID        switch to another session in this process
+  /quit             exit (history is in memory only and will be lost)"""
+
+
+def cmd_chat(args, settings: Settings) -> int:
+    project, retriever = _build_index(settings)
+    service = app.build_conversation(settings, index=app.KnowledgeIndex(project, retriever, 0, settings.retrieval))
+    session = service.new_session(args.version)
+    print(f"Session {session.session_id} (memory only; lost on exit). Covered versions: "
+          f"{', '.join(project.versions)}. Type /help for commands.", file=sys.stderr)
+    pending_version = None
+    while True:
+        try:
+            line = input(f"\n[{session.session_id[-4:]}] you> ").strip()
+        except EOFError:
+            return 0
+        if not line:
+            continue
+        if line in ("/quit", "/exit"):
+            return 0
+        if line == "/help":
+            print(CHAT_HELP)
+            continue
+        if line == "/new":
+            episode = service.new_episode(session.session_id)
+            print(f"New problem {episode.episode_id}; version kept: {episode.confirmed.version or '-'}")
+            continue
+        if line.startswith("/version"):
+            pending_version = line.split(maxsplit=1)[1] if " " in line else None
+            print(f"Version selected: {pending_version}. It applies from your next message.")
+            continue
+        if line == "/session":
+            print(cli_view.render_session(service.store.get(session.session_id)))
+            continue
+        if line == "/newsession":
+            session = service.new_session()
+            print(f"Switched to new session {session.session_id}")
+            continue
+        if line.startswith("/switch "):
+            try:
+                session = service.store.get(line.split(maxsplit=1)[1])
+            except KeyError:
+                print("No such session. Known: " + ", ".join(service.store.list_ids()))
+            continue
+        try:
+            result = service.submit(session.session_id, validate_question(line), pending_version)
+        except (InputError, InvalidVersionError) as exc:
+            print(f"error [INVALID_INPUT]: {exc}", file=sys.stderr)
+            continue
+        pending_version = None
+        if result.answer or result.state:
+            record = (runlog.answer_record(result.run_id, result.answer, runlog.workflow_extra(result.state))
+                      if result.answer else runlog.failed_record(result.run_id, line, result.state,
+                                                                  runlog.workflow_extra(result.state)))
+            record.update({"session_id": result.session_id, "episode_id": result.episode_id,
+                           "status": result.status})
+            app.build_run_log().save(record)
+        print(cli_view.render_turn(result))
+
+
 # ---------------------------------------------------------------- entry point
 
 def build_parser() -> argparse.ArgumentParser:
@@ -221,6 +287,11 @@ def build_parser() -> argparse.ArgumentParser:
     upgrade.add_argument("--show-context", action="store_true", help="Print the exact prompt sent to the model.")
     upgrade.add_argument("--retrieval", choices=SUPPORTED_RETRIEVAL, help="Override TRACEPILOT_RETRIEVAL.")
     upgrade.set_defaults(handler=cmd_upgrade)
+
+    chat = sub.add_parser("chat", help="Multi-turn diagnosis in the terminal (memory only).")
+    chat.add_argument("--version", help="Pre-select a version for this session.")
+    chat.add_argument("--retrieval", choices=SUPPORTED_RETRIEVAL, help="Override TRACEPILOT_RETRIEVAL.")
+    chat.set_defaults(handler=cmd_chat)
     return parser
 
 
