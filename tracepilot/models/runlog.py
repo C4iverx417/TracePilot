@@ -24,6 +24,7 @@ def answer_record(run_id: str, answer: Answer, extra: Dict[str, Any] | None = No
     return {
         "run_id": run_id,
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "status": "completed",
         "question": answer.question,
         "outcome": answer.outcome,
         "target_version": answer.target_version,
@@ -58,3 +59,31 @@ class RunLog:
         path = self.directory / f"{record['run_id']}.json"
         path.write_text(json.dumps(record, ensure_ascii=False, indent=2, default=list), encoding="utf-8")
         return path
+
+
+def workflow_extra(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Graph-specific facts for the run record: branch taken, budgets used, why it ended."""
+    return {
+        "engine": "graph",
+        "end_reason": state.get("end_reason"),
+        "retrieval_rounds": state.get("retrieval_rounds"),
+        "model_calls": state.get("model_calls"),
+        "query_variants": state.get("query_variants"),
+        "final_evidence_chunk_ids": [h.chunk.chunk_id for h in (state.get("answer").evidence.values()
+                                                                  if state.get("answer") else [])],
+        "trace": state.get("trace"),
+    }
+
+
+def failed_record(run_id: str, question: str, state: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "run_id": run_id,
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "status": "failed",
+        "question": question,
+        "error_code": state.get("error_code"),
+        "error": state.get("error"),
+        "usage": {"prompt_tokens": state.get("usage_in"), "completion_tokens": state.get("usage_out")},
+        "estimated_cost_usd": None,
+        **extra,
+    }

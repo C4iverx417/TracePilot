@@ -29,9 +29,16 @@ SYSTEM_PROMPT = (
 # ---------------------------------------------------------------- errors
 
 class ModelError(Exception):
-    """Base class. `code` maps to the error codes in PRD section 11.3."""
+    """Base class. `code` maps to the error codes in PRD section 11.3.
+    `retryable` errors (timeouts, 429, 5xx) may be retried with backoff; others stop at once."""
 
     code = "MODEL_UNAVAILABLE"
+    retryable = False
+
+    def __init__(self, message: str = "", retryable: Optional[bool] = None):
+        super().__init__(message)
+        if retryable is not None:
+            self.retryable = retryable
 
 
 class ModelAuthError(ModelError):
@@ -40,6 +47,7 @@ class ModelAuthError(ModelError):
 
 class ModelTimeoutError(ModelError):
     code = "DEADLINE_EXCEEDED"
+    retryable = True
 
 
 class InvalidModelOutputError(ModelError):

@@ -173,3 +173,11 @@ def render_answer(answer: Answer, run_path: str | None = None) -> str:
     if run_path:
         lines.append(f"run record: {run_path}")
     return "\n".join(lines)
+
+
+def render_trace(trace) -> str:
+    lines = ["Workflow trace:"]
+    for i, event in enumerate(trace, start=1):
+        detail = ", ".join(f"{k}={v}" for k, v in event.items() if k not in ("node", "ms") and v is not None)
+        lines.append(f"  {i:2}. {event['node']:<12} {event['ms']:>5} ms  {detail}")
+    return "\n".join(lines)

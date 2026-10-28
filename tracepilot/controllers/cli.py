@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from .. import app
-from ..config import SUPPORTED_RETRIEVAL, ConfigError, Settings, load_settings
+from ..config import SUPPORTED_ENGINES, SUPPORTED_RETRIEVAL, ConfigError, Settings, load_settings
 from ..models import dev_eval, runlog
 from ..models.llm import ModelError, build_messages, build_payload
 from ..models.retrieval import Retriever
@@ -146,8 +146,23 @@ def cmd_answer(args, settings: Settings) -> int:
     project, retriever = _build_index(settings)
     pipeline = app.build_rag(settings, retriever, project)
     choice = _parse(pipeline, args.version)
-    return _finish(args, pipeline, question, pipeline.version_gate(question, choice),
-                   lambda: pipeline.prepare(question, choice.version))
+    if settings.engine == "rag" or args.show_context:
+        return _finish(args, pipeline, question, pipeline.version_gate(question, choice),
+                       lambda: pipeline.prepare(question, choice.version))
+
+    state = app.build_workflow(settings, pipeline).run(question, args.version)
+    run_id = runlog.new_run_id()
+    extra = runlog.workflow_extra(state)
+    if args.trace:
+        print(cli_view.render_trace(state["trace"]))
+        print()
+    if state.get("error_code"):
+        path = app.build_run_log().save(runlog.failed_record(run_id, question, state, extra))
+        print(f"error [{state['error_code']}]: {state['error']}\nrun record: {path}", file=sys.stderr)
+        return 1
+    path = app.build_run_log().save(runlog.answer_record(run_id, state["answer"], extra))
+    print(cli_view.render_answer(state["answer"], str(path)))
+    return 0
 
 
 def cmd_upgrade(args, settings: Settings) -> int:
@@ -190,7 +205,11 @@ def build_parser() -> argparse.ArgumentParser:
     answer.add_argument("--version", default="unknown",
                         help="Your Pydantic version, e.g. 2.14.1 or 1.10; 'unknown' if unsure (default).")
     answer.add_argument("-k", type=int, help="How many chunks to give the model (default TRACEPILOT_TOP_K).")
-    answer.add_argument("--show-context", action="store_true", help="Print the exact prompt sent to the model.")
+    answer.add_argument("--show-context", action="store_true",
+                        help="Print the exact prompt sent to the model (uses the single-pass rag engine).")
+    answer.add_argument("--engine", choices=SUPPORTED_ENGINES, help="graph = LangGraph workflow, rag = single pass.")
+    answer.add_argument("--max-rounds", type=int, help="Override the retrieval round limit (graph engine).")
+    answer.add_argument("--trace", action="store_true", help="Print the node-by-node workflow trace.")
     answer.add_argument("--retrieval", choices=SUPPORTED_RETRIEVAL, help="Override TRACEPILOT_RETRIEVAL.")
     answer.set_defaults(handler=cmd_answer)
 
@@ -210,6 +229,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     overrides = {}
     if getattr(args, "retrieval", None):
         overrides["retrieval"] = args.retrieval
+    if getattr(args, "engine", None):
+        overrides["engine"] = args.engine
+    if getattr(args, "max_rounds", None) is not None:
+        if args.max_rounds < 1:
+            print("error [INVALID_INPUT]: --max-rounds must be >= 1", file=sys.stderr)
+            return 2
+        overrides["max_retrieval_rounds"] = args.max_rounds
     if getattr(args, "k", None) is not None and args.k < 1:
         print("error [INVALID_INPUT]: -k must be >= 1", file=sys.stderr)
         return 2

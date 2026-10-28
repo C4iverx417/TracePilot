@@ -14,6 +14,7 @@ from typing import Dict, Optional
 SUPPORTED_PROVIDERS = ("mock", "openai")
 SUPPORTED_EMBEDDINGS = ("fastembed", "fake")
 SUPPORTED_RETRIEVAL = ("hybrid", "vector", "keyword")
+SUPPORTED_ENGINES = ("graph", "rag")
 
 
 class ConfigError(Exception):
@@ -49,6 +50,10 @@ class Settings:
     retrieval: str
     candidates: int
     per_document: int
+    engine: str
+    max_retrieval_rounds: int
+    max_model_calls: int
+    deadline_s: float
     project_path: Path
     # repr=False: printing Settings never shows the key.
     api_key: Optional[str] = field(default=None, repr=False)
@@ -103,6 +108,10 @@ def load_settings(env: Optional[Dict[str, str]] = None, dotenv_path: Optional[Pa
             f"Unknown TRACEPILOT_RETRIEVAL={retrieval!r}; choose one of {', '.join(SUPPORTED_RETRIEVAL)}"
         )
 
+    engine = env.get("TRACEPILOT_ENGINE", "graph").strip().lower()
+    if engine not in SUPPORTED_ENGINES:
+        raise ConfigError(f"Unknown TRACEPILOT_ENGINE={engine!r}; choose one of {', '.join(SUPPORTED_ENGINES)}")
+
     max_tokens = _get_positive_int(env, "TRACEPILOT_MAX_TOKENS", 512)
 
     return Settings(
@@ -121,6 +130,10 @@ def load_settings(env: Optional[Dict[str, str]] = None, dotenv_path: Optional[Pa
         retrieval=retrieval,
         candidates=_get_positive_int(env, "TRACEPILOT_CANDIDATES", 20),  # per retriever, before fusion
         per_document=_get_positive_int(env, "TRACEPILOT_PER_DOCUMENT", 2),  # context diversity cap
+        engine=engine,
+        max_retrieval_rounds=_get_positive_int(env, "TRACEPILOT_MAX_ROUNDS", 3),  # PRD 9.3
+        max_model_calls=_get_positive_int(env, "TRACEPILOT_MAX_MODEL_CALLS", 8),
+        deadline_s=_get_float(env, "TRACEPILOT_DEADLINE_S", 60.0),
         project_path=Path(env.get("TRACEPILOT_PROJECT", "data/sources/pydantic/project.json")),
         api_key=api_key,
     )

@@ -22,6 +22,7 @@ from .models.rag import RagPipeline
 from .models.keyword import KeywordRetriever
 from .models.retrieval import HybridRetriever, Retriever, VectorRetriever
 from .models.runlog import RunLog
+from .models.workflow import Budget, SupportWorkflow
 from .models.sources import Project, load_project
 
 
@@ -103,3 +104,9 @@ def build_rag(settings: Settings, retriever: Retriever | None = None,
 
 def build_run_log() -> RunLog:
     return RunLog(Path("var/runs"))
+
+
+def build_workflow(settings: Settings, pipeline: RagPipeline) -> SupportWorkflow:
+    budget = Budget(max_retrieval_rounds=settings.max_retrieval_rounds, max_model_calls=settings.max_model_calls,
+                    deadline_s=settings.deadline_s)
+    return SupportWorkflow(pipeline, budget)

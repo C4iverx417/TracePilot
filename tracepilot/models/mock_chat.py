@@ -65,7 +65,15 @@ class ExtractiveMockChatModel(BaseChatModel):
         overlapping = [(cid, body) for cid, body in blocks if _coverage(q_terms, body) >= self.min_coverage]
         overlapping.sort(key=lambda block: -_coverage(q_terms, block[1]))
 
-        if not overlapping:
+        if "<assess>" in prompt:  # evidence-assessment request from the workflow (U08)
+            payload = {
+                "sufficient": bool(overlapping),
+                "relevant_ids": [cid for cid, _ in overlapping],
+                "missing": [] if overlapping else ["Evidence that mentions the question's key terms"],
+                # Rewrite = keep only content words, which shifts both BM25 and embeddings.
+                "rewritten_query": " ".join(w for w in _WORD.findall(question) if w.lower() not in _STOP),
+            }
+        elif not overlapping:
             payload = {
                 "outcome": "insufficient_evidence",
                 "summary": "[mock] None of the provided evidence mentions the terms in the question.",

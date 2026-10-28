@@ -19,7 +19,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 
 from .answering import Answer, AnswerDraft, attach_citations, build_messages, label_evidence, parse_draft
-from .chat import invoke_chat
+from .chat import ChatCall, invoke_chat
 from .documents import SearchHit
 from .guards import enforce_outcome, find_conflicts, redact_draft, split_historical, suspicious_evidence
 from .llm import Usage
@@ -120,35 +120,43 @@ class RagPipeline:
     # ------------------------------------------------------------ model call + checks
 
     def generate(self, question: str, prepared: Prepared) -> Answer:
-        evidence = prepared.evidence
-        if not evidence:
-            # Nothing retrieved: answering would only be the model's own knowledge. Skip the call.
-            return no_call_answer(question, "insufficient_evidence", "No documentation was retrieved for this question.",
-                                  ["Documentation that covers this question"], prepared.version)
-
+        if not prepared.evidence:
+            return empty_evidence_answer(question, prepared)
         call = invoke_chat(self.chat_model, prepared.messages)
-        draft, citations, invalid = attach_citations(redact_draft(parse_draft(call.text)), evidence, prepared.groups)
-        draft, unsupported = enforce_outcome(draft)
-        draft, historical = split_historical(draft, evidence)
+        return finish_answer(question, prepared, parse_draft(call.text), call)
 
-        conflicts = find_conflicts(evidence)
-        cited = {cid for f in draft.findings + historical for cid in f.citation_ids}
-        if any(a in cited and b in cited for a, b in conflicts):
-            draft = draft.model_copy(update={"outcome": "conflicting_evidence"})
 
-        answer = Answer(
-            question=question, draft=draft, citations=[c for c in citations if c.id in cited],
-            invalid_citation_ids=invalid, evidence=evidence, model=call.model, latency_ms=call.latency_ms,
-            usage=call.usage, target_version=prepared.version, compare_versions=prepared.compare,
-            groups=prepared.groups, historical_cases=historical, unsupported_claims=unsupported,
-            suspicious_evidence_ids=suspicious_evidence(evidence),
-            conflicts=[f"{a} contradicts {b} (marked by curator)" for a, b in conflicts],
+def empty_evidence_answer(question: str, prepared: Prepared) -> Answer:
+    # Nothing retrieved: answering would only be the model's own knowledge. Skip the call.
+    return no_call_answer(question, "insufficient_evidence", "No documentation was retrieved for this question.",
+                          ["Documentation that covers this question"], prepared.version)
+
+
+def finish_answer(question: str, prepared: Prepared, draft: AnswerDraft, call: ChatCall) -> Answer:
+    """Deterministic checks on a parsed model draft. Shared by the plain pipeline and the LangGraph workflow."""
+    evidence = prepared.evidence
+    draft, citations, invalid = attach_citations(redact_draft(draft), evidence, prepared.groups)
+    draft, unsupported = enforce_outcome(draft)
+    draft, historical = split_historical(draft, evidence)
+
+    conflicts = find_conflicts(evidence)
+    cited = {cid for f in draft.findings + historical for cid in f.citation_ids}
+    if any(a in cited and b in cited for a, b in conflicts):
+        draft = draft.model_copy(update={"outcome": "conflicting_evidence"})
+
+    answer = Answer(
+        question=question, draft=draft, citations=[c for c in citations if c.id in cited],
+        invalid_citation_ids=invalid, evidence=evidence, model=call.model, latency_ms=call.latency_ms,
+        usage=call.usage, target_version=prepared.version, compare_versions=prepared.compare,
+        groups=prepared.groups, historical_cases=historical, unsupported_claims=unsupported,
+        suspicious_evidence_ids=suspicious_evidence(evidence),
+        conflicts=[f"{a} contradicts {b} (marked by curator)" for a, b in conflicts],
+    )
+    if historical and not draft.findings:
+        answer.notes.append("Only similar issues support these points; the cause of YOUR problem is not confirmed.")
+    if answer.suspicious_evidence_ids:
+        answer.notes.append(
+            "Evidence " + ", ".join(answer.suspicious_evidence_ids)
+            + " contains instruction-like text; it was treated as data, not followed."
         )
-        if historical and not draft.findings:
-            answer.notes.append("Only similar issues support these points; the cause of YOUR problem is not confirmed.")
-        if answer.suspicious_evidence_ids:
-            answer.notes.append(
-                "Evidence " + ", ".join(answer.suspicious_evidence_ids)
-                + " contains instruction-like text; it was treated as data, not followed."
-            )
-        return answer
+    return answer

@@ -12,7 +12,8 @@ U01、U02 按旧流程交付了学习交接卡（见下方），予以保留。
 | U05 | 已验证 | 两个版本 1.10.26 / 2.14.1（git tag 证据）；版本输入解析；先过滤后排序；unsupported_version / insufficient_context 不调用模型 |
 | U06 | 已验证 | BM25（自实现）+ 向量，RRF 融合；`Retriever` 接口；`--retrieval` 可切换基线；默认 top_k=8 |
 | U07 | 已验证 | `upgrade --from --to`：两版本分别检索、分组呈现；5 个人工筛选的真实 Issue（GitHub 角色 + 解决证据）；文档事实 / 历史案例分离；冲突机制；每文档最多 2 块 |
-| U08–U15 | 未开始 | |
+| U08 | 已验证 | LangGraph 状态图：check_input → retrieve → assess →（补检索 / generate）→ finish；预算：3 轮检索、8 次调用、1 次格式修复、2 次瞬时重试、60 秒；`--trace` |
+| U09–U15 | 未开始 | |
 
 ---
 
@@ -221,3 +222,12 @@ manifest.json + snapshot/*.md → load_snapshot (校验 SHA-256) → SourceDocum
   2. 升级问题首次运行时，#7472 的标题与报错原文**完全相同**，加上标题在嵌入文本里重复两次，导致 v2 组 4 个名额全被这一个 Issue 占据——而它恰好是“根因不同”的案例，迁移指南被挤出。修正：嵌入文本去掉重复标题；组装上下文时每文档最多 2 块（只影响上下文选择，不改变检索排名，devcheck 结果不变）。修正后 v2 组为：#7472 ×2、迁移指南、#6777。
 - **验证：** 67 个测试通过（含 AT-07 分组、AT-10 仅相似 Issue 不断言根因、冲突、范围版本）。devcheck 三个题集结果不变（u02 4/4、u05 6/6、u06 9/10，错误版本块 0）。
 - **限制：** 5 个 Issue 远少于 PRD 规划的 30–50 个；真实数据中**没有**已标注的文档冲突，冲突机制只由测试夹具验证；mock 只抽取首句，无法真正“比较”两组证据。
+
+### U08 —— 首轮检索不足时得到有限补检索后的结果（已验证）
+
+- **新增：** `models/workflow.py`（`SupportWorkflow`、`WorkflowState`、`Budget`、`EvidenceAssessment` schema）；`rag.finish_answer`（把调用后的确定性检查从 `RagPipeline.generate` 中拆出，工作流和基线共用）；`ModelError.retryable`（超时、429、5xx、连接错误可重试；鉴权、格式错误不重试）；`answer --engine graph|rag`、`--max-rounds`、`--trace`；配置 `TRACEPILOT_ENGINE / MAX_ROUNDS / MAX_MODEL_CALLS / DEADLINE_S`。图结构导出在 `docs/workflow.mmd`。
+- **图：** `check_input`（版本门）→ `retrieve`（合并进候选池）→ `assess`（模型按 schema 判断是否充分、哪些相关、给出改写查询）→ 条件路由：充分 → `generate`；不充分且有新查询且未到轮数上限 → 回到 `retrieve`；否则 → `generate`（用现有证据回答或说明缺口）→ `finish`。`trace` 字段用 `operator.add` reducer，每个节点追加一条事件。
+- **硬约束在代码里：** 每次真正发出的请求（含重试、修复）都计入调用数；超出调用预算 → `BUDGET_EXCEEDED`，超时 → `DEADLINE_EXCEEDED`；格式错误只修复一次，再错 → `INVALID_MODEL_OUTPUT`；系统故障通过 `error_code` 表达，**不伪装成“证据不足”**（FR-08）。未经评估确认充分的 “answered” 会降级为 partially_answered。
+- **调试记录：** 候选池最初按分数合并，但 BM25 分数**跨查询不可比**，第一轮噪声的高分压过第二轮的正确结果；改为按“最佳排名，同排名取较新一轮”合并。
+- **验证：** 78 个测试通过：AT-08（首轮无关、改写后命中、3 次调用）、AT-09（3 轮上限、绝无第 4 轮）、改写与原查询相同时提前停止、一次格式修复成功 / 两次失败、429 退避重试（1s、2s）、重试上限、鉴权错误不重试、调用预算、截止时间（假时钟）。CLI 上 Django 问题：2 轮检索、3 次调用后结束，end_reason=retrieval_budget_exhausted。
+- **限制：** mock 的评估只看词覆盖率，真实模型的判断质量未验证；`upgrade` 仍走单次 RAG（未迁入图）；`--show-context` 使用单次 RAG 引擎。

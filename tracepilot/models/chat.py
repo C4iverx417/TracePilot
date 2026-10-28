@@ -41,9 +41,9 @@ def _map_provider_error(exc: Exception) -> Optional[ModelError]:
     if isinstance(exc, openai.RateLimitError):
         return ModelRateLimitedError("Provider rate limit (HTTP 429)")
     if isinstance(exc, openai.APIStatusError):
-        return ModelError(f"Provider returned HTTP {exc.status_code}")
+        return ModelError(f"Provider returned HTTP {exc.status_code}", retryable=exc.status_code >= 500)
     if isinstance(exc, openai.APIConnectionError):
-        return ModelError("Could not reach the model provider")
+        return ModelError("Could not reach the model provider", retryable=True)
     return None
 
 
