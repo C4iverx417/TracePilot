@@ -12,9 +12,9 @@ from contextlib import redirect_stderr, redirect_stdout
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest import mock
 
-from tracepilot import cli
+from tracepilot.controllers import cli
 from tracepilot.config import ConfigError, load_settings
-from tracepilot.llm import (
+from tracepilot.models.llm import (
     InvalidModelOutputError,
     ModelAuthError,
     ModelTimeoutError,
@@ -129,25 +129,25 @@ class ConfigAndCliTest(unittest.TestCase):
 
     def run_cli(self, argv, env):
         out, err = io.StringIO(), io.StringIO()
-        with mock.patch("tracepilot.cli.load_settings", lambda: load_settings(env)):
+        with mock.patch("tracepilot.controllers.cli.load_settings", lambda: load_settings(env)):
             with redirect_stdout(out), redirect_stderr(err):
                 code = cli.main(argv)
         return code, out.getvalue(), err.getvalue()
 
     def test_cli_mock_happy_path(self):
-        code, out, _ = self.run_cli(["what is RAG?"], {"TRACEPILOT_PROVIDER": "mock"})
+        code, out, _ = self.run_cli(["ask", "what is RAG?"], {"TRACEPILOT_PROVIDER": "mock"})
         self.assertEqual(code, 0)
         self.assertIn("[mock]", out)
         self.assertIn("(estimated)", out)
 
     def test_cli_rejects_empty_question(self):
-        code, _, err = self.run_cli(["   "], {"TRACEPILOT_PROVIDER": "mock"})
+        code, _, err = self.run_cli(["ask", "   "], {"TRACEPILOT_PROVIDER": "mock"})
         self.assertEqual(code, 2)
         self.assertIn("INVALID_INPUT", err)
 
     def test_cli_show_request_never_prints_key(self):
         env = {"TRACEPILOT_PROVIDER": "openai", "OPENAI_API_KEY": FAKE_KEY, "OPENAI_BASE_URL": "http://127.0.0.1:9"}
-        code, out, err = self.run_cli(["--show-request", "hi"], env)
+        code, out, err = self.run_cli(["ask", "--show-request", "hi"], env)
         self.assertEqual(code, 1)  # nothing listens on port 9 -> MODEL_UNAVAILABLE
         self.assertIn('"messages"', out)
         self.assertNotIn(FAKE_KEY, out + err)

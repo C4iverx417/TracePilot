@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 SUPPORTED_PROVIDERS = ("mock", "openai")
+SUPPORTED_EMBEDDINGS = ("fastembed", "fake")
 
 
 class ConfigError(Exception):
@@ -40,6 +41,11 @@ class Settings:
     temperature: float
     max_tokens: int
     timeout_s: float
+    embedding: str
+    embedding_model: str
+    chunk_size: int
+    top_k: int
+    manifest_path: Path
     # repr=False: printing Settings never shows the key.
     api_key: Optional[str] = field(default=None, repr=False)
 
@@ -52,6 +58,13 @@ def _get_float(env: Dict[str, str], key: str, default: float) -> float:
         return float(raw)
     except ValueError:
         raise ConfigError(f"{key} must be a number, got {raw!r}")
+
+
+def _get_positive_int(env: Dict[str, str], key: str, default: int) -> int:
+    value = _get_float(env, key, default)
+    if value <= 0 or value != int(value):
+        raise ConfigError(f"{key} must be a positive integer, got {env.get(key)!r}")
+    return int(value)
 
 
 def load_settings(env: Optional[Dict[str, str]] = None, dotenv_path: Optional[Path] = None) -> Settings:
@@ -74,9 +87,13 @@ def load_settings(env: Optional[Dict[str, str]] = None, dotenv_path: Optional[Pa
             "Put it in .env (see .env.example) or export it in your shell."
         )
 
-    max_tokens = int(_get_float(env, "TRACEPILOT_MAX_TOKENS", 512))
-    if max_tokens <= 0:
-        raise ConfigError("TRACEPILOT_MAX_TOKENS must be positive")
+    embedding = env.get("TRACEPILOT_EMBEDDING", "fastembed").strip().lower()
+    if embedding not in SUPPORTED_EMBEDDINGS:
+        raise ConfigError(
+            f"Unknown TRACEPILOT_EMBEDDING={embedding!r}; choose one of {', '.join(SUPPORTED_EMBEDDINGS)}"
+        )
+
+    max_tokens = _get_positive_int(env, "TRACEPILOT_MAX_TOKENS", 512)
 
     return Settings(
         provider=provider,
@@ -85,5 +102,12 @@ def load_settings(env: Optional[Dict[str, str]] = None, dotenv_path: Optional[Pa
         temperature=_get_float(env, "TRACEPILOT_TEMPERATURE", 0.2),
         max_tokens=max_tokens,
         timeout_s=_get_float(env, "TRACEPILOT_TIMEOUT_S", 30.0),
+        embedding=embedding,
+        embedding_model=env.get(
+            "TRACEPILOT_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        ),
+        chunk_size=_get_positive_int(env, "TRACEPILOT_CHUNK_SIZE", 400),
+        top_k=_get_positive_int(env, "TRACEPILOT_TOP_K", 5),
+        manifest_path=Path(env.get("TRACEPILOT_MANIFEST", "data/sources/pydantic/manifest.json")),
         api_key=api_key,
     )

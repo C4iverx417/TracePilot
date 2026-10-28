@@ -16,9 +16,9 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol
 
-from .config import Settings
+from ..config import Settings
 
 SYSTEM_PROMPT = (
     "You are TracePilot, a technical support assistant for open-source projects. "
@@ -76,6 +76,12 @@ class ChatResult:
     finish_reason: Optional[str]
     latency_ms: int
     usage: Usage = field(default_factory=Usage)
+
+
+class ChatModel(Protocol):
+    """What callers depend on. Any client with this method can be swapped in."""
+
+    def chat(self, messages: List[Message]) -> ChatResult: ...
 
 
 def build_messages(question: str) -> List[Message]:
@@ -184,8 +190,3 @@ def parse_response(raw: bytes, provider: str, fallback_model: str, latency_ms: i
         usage=usage,
     )
 
-
-def make_client(settings: Settings):
-    if settings.provider == "mock":
-        return MockClient(settings)
-    return OpenAICompatibleClient(settings)

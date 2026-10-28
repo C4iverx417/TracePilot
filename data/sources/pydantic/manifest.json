@@ -1,0 +1,19 @@
+{
+  "project_id": "pydantic",
+  "snapshot_id": "pydantic-v2.14.1",
+  "version": "2.14.1",
+  "version_evidence": {
+    "kind": "git_tag",
+    "repo": "pydantic/pydantic",
+    "tag": "v2.14.1",
+    "commit": "b2212c787fb5c73386dc770681ec49cd09da8e73"
+  },
+  "license": "MIT (c) Pydantic Services Inc. and contributors; see https://github.com/pydantic/pydantic/blob/main/LICENSE",
+  "documents": [
+    {"document_id": "pydantic-concepts-models", "title": "Models", "source_type": "official_doc", "repo_path": "docs/concepts/models.md"},
+    {"document_id": "pydantic-concepts-validators", "title": "Validators", "source_type": "official_doc", "repo_path": "docs/concepts/validators.md"},
+    {"document_id": "pydantic-concepts-config", "title": "Configuration", "source_type": "official_doc", "repo_path": "docs/concepts/config.md"},
+    {"document_id": "pydantic-errors-handling", "title": "Error Handling", "source_type": "official_doc", "repo_path": "docs/errors/errors.md"},
+    {"document_id": "pydantic-migration", "title": "Migration Guide", "source_type": "migration_guide", "repo_path": "docs/migration.md"}
+  ]
+}

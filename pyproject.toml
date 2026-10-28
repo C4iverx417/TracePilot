@@ -2,8 +2,15 @@
 name = "tracepilot"
 version = "0.1.0"
 description = "Version-aware, citation-backed support copilot for open-source projects"
-requires-python = ">=3.9"
-dependencies = []  # U01 uses only the standard library
+requires-python = ">=3.12"
+dependencies = [
+    "fastembed>=0.6",
+    "langchain-core>=1,<2",
+]
 
 [project.scripts]
-tracepilot = "tracepilot.cli:main"
+tracepilot = "tracepilot.controllers.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
