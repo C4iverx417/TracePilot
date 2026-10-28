@@ -31,7 +31,7 @@ EVIL = make_doc(
 def pipeline(model, docs=(GOOD,), k=3) -> RagPipeline:
     r = VectorRetriever(DeterministicFakeEmbedding(size=16))
     r.index(docs, [c for d in docs for c in MarkdownChunker(chunk_size=400).split(d)])
-    return RagPipeline(r, model, k=k)
+    return RagPipeline(r, model, covered_versions=("1.0",), k=k)
 
 
 def scripted(**draft) -> FakeListChatModel:
@@ -53,7 +53,7 @@ class OutcomeRulesTest(unittest.TestCase):
         self.assertEqual(clean.findings, [])
 
     def test_model_hallucinated_citation_cannot_keep_answered(self):
-        answer = pipeline(scripted(findings=[{"text": "x", "citation_ids": ["c99"]}])).answer("frozen")
+        answer = pipeline(scripted(findings=[{"text": "x", "citation_ids": ["c99"]}])).answer("frozen", "1.0")
         self.assertEqual(answer.outcome, "insufficient_evidence")
         self.assertEqual(answer.invalid_citation_ids, ["c99"])
         self.assertEqual(answer.unsupported_claims, ["x"])
@@ -61,17 +61,17 @@ class OutcomeRulesTest(unittest.TestCase):
 
 class FixedSamplesTest(unittest.TestCase):
     def test_answerable(self):
-        answer = pipeline(ExtractiveMockChatModel()).answer("How do I make instances immutable with frozen?")
+        answer = pipeline(ExtractiveMockChatModel()).answer("How do I make instances immutable with frozen?", "1.0")
         self.assertEqual(answer.outcome, "answered")
         self.assertTrue(answer.citations)
 
     def test_out_of_scope(self):
-        answer = pipeline(ExtractiveMockChatModel()).answer("Configure Django CORS middleware")
+        answer = pipeline(ExtractiveMockChatModel()).answer("Configure Django CORS middleware", "1.0")
         self.assertEqual(answer.outcome, "insufficient_evidence")
         self.assertEqual(answer.citations, [])
 
     def test_malicious_source_is_flagged_not_followed(self):  # PRD AT-16
-        answer = pipeline(ExtractiveMockChatModel(), docs=(GOOD, EVIL)).answer("make instances immutable")
+        answer = pipeline(ExtractiveMockChatModel(), docs=(GOOD, EVIL)).answer("make instances immutable", "1.0")
         evil_ids = [cid for cid, hit in answer.evidence.items() if hit.document.document_id == "evil"]
         self.assertEqual(answer.suspicious_evidence_ids, evil_ids)
         self.assertTrue(any("treated as data" in note for note in answer.notes))
@@ -80,14 +80,14 @@ class FixedSamplesTest(unittest.TestCase):
 class SafetyTest(unittest.TestCase):
     def test_no_evidence_skips_model_call(self):
         model = mock.Mock()
-        answer = pipeline(model, docs=()).answer("anything")
+        answer = pipeline(model, docs=()).answer("anything", "1.0")
         model.invoke.assert_not_called()
         self.assertEqual(answer.outcome, "insufficient_evidence")
 
     def test_secrets_in_model_output_are_redacted(self):
         self.assertEqual(redact_secrets("key sk-abcdefghijklmnop end"), "key [REDACTED] end")
         answer = pipeline(scripted(summary="use sk-abcdefghijklmnop",
-                                   findings=[{"text": "t", "citation_ids": ["c1"]}])).answer("frozen")
+                                   findings=[{"text": "t", "citation_ids": ["c1"]}])).answer("frozen", "1.0")
         self.assertNotIn("sk-abcdefghijklmnop", answer.draft.summary)
 
 

@@ -45,7 +45,7 @@ class Settings:
     embedding_model: str
     chunk_size: int
     top_k: int
-    manifest_path: Path
+    project_path: Path
     # repr=False: printing Settings never shows the key.
     api_key: Optional[str] = field(default=None, repr=False)
 
@@ -108,6 +108,6 @@ def load_settings(env: Optional[Dict[str, str]] = None, dotenv_path: Optional[Pa
         ),
         chunk_size=_get_positive_int(env, "TRACEPILOT_CHUNK_SIZE", 400),
         top_k=_get_positive_int(env, "TRACEPILOT_TOP_K", 5),
-        manifest_path=Path(env.get("TRACEPILOT_MANIFEST", "data/sources/pydantic/manifest.json")),
+        project_path=Path(env.get("TRACEPILOT_PROJECT", "data/sources/pydantic/project.json")),
         api_key=api_key,
     )

@@ -1,0 +1,22 @@
+{
+  "pydantic-v1-usage-models": {
+    "fetched_at": "2026-10-28T02:10:26+00:00",
+    "sha256": "93a04c0e93631d0e7be8910014a3176b07502b4852e5ba606ffa693d7c2a6c21",
+    "bytes": 23645
+  },
+  "pydantic-v1-usage-validators": {
+    "fetched_at": "2026-10-28T02:10:26+00:00",
+    "sha256": "d310eb09d07df7eb75382fca955e2fdc38af5d7f89ce329afe818177cab4088d",
+    "bytes": 5119
+  },
+  "pydantic-v1-usage-model-config": {
+    "fetched_at": "2026-10-28T02:10:26+00:00",
+    "sha256": "61536853429f1286b9d024e3f9fa3461cd88c78a217e58968e9d23fdaf3d191d",
+    "bytes": 8692
+  },
+  "pydantic-v1-usage-settings": {
+    "fetched_at": "2026-10-28T02:10:26+00:00",
+    "sha256": "a9bc95cc65dade75592a58c29fc9da03579b07a72b12bf3ce36aaee7123b56ee",
+    "bytes": 12021
+  }
+}

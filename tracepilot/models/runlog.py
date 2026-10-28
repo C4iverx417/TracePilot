@@ -26,6 +26,7 @@ def answer_record(run_id: str, answer: Answer, extra: Dict[str, Any] | None = No
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "question": answer.question,
         "outcome": answer.outcome,
+        "target_version": answer.target_version,
         "model": answer.model,
         "latency_ms": answer.latency_ms,
         "usage": dataclasses.asdict(answer.usage),

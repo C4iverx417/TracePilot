@@ -87,18 +87,18 @@ class ParseAndCiteTest(unittest.TestCase):
 class PipelineTest(unittest.TestCase):
     def test_scripted_model_end_to_end(self):
         model = FakeListChatModel(responses=[draft_json(findings=[{"text": "x", "citation_ids": ["c1", "c7"]}])])
-        answer = RagPipeline(retriever(), model, k=2).answer("frozen")
+        answer = RagPipeline(retriever(), model, covered_versions=("1.0",), k=2).answer("frozen", "1.0")
         self.assertEqual(answer.invalid_citation_ids, ["c7"])
         self.assertEqual(len(answer.citations), 1)
 
     def test_mock_model_cites_matching_evidence(self):
-        answer = RagPipeline(retriever(), ExtractiveMockChatModel(), k=2).answer("make instances immutable")
+        answer = RagPipeline(retriever(), ExtractiveMockChatModel(), covered_versions=("1.0",), k=2).answer("make instances immutable", "1.0")
         self.assertEqual(answer.outcome, "answered")
         self.assertIn("frozen=True", answer.draft.findings[0].text)
         self.assertEqual(answer.usage.source, "estimated")
 
     def test_mock_model_reports_insufficient_evidence(self):
-        answer = RagPipeline(retriever(), ExtractiveMockChatModel(), k=2).answer("Django CORS middleware")
+        answer = RagPipeline(retriever(), ExtractiveMockChatModel(), covered_versions=("1.0",), k=2).answer("Django CORS middleware", "1.0")
         self.assertEqual(answer.outcome, "insufficient_evidence")
         self.assertEqual(answer.citations, [])
 
@@ -130,7 +130,7 @@ class AnswerCliTest(unittest.TestCase):
                 mock.patch("tracepilot.controllers.cli.load_settings", lambda: load_settings(env)), \
                 mock.patch("tracepilot.app.build_run_log", lambda: RunLog(Path(tmp))), \
                 redirect_stdout(out), redirect_stderr(err):
-            code = cli.main(["answer", "--show-context", "frozen model config"])
+            code = cli.main(["answer", "--show-context", "--version", "2.14.1", "frozen model config"])
             records = list(Path(tmp).glob("run_*.json"))
             record = json.loads(records[0].read_text()) if records else {}
         self.assertEqual(code, 0)

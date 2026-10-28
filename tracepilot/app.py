@@ -19,7 +19,7 @@ from .models.mock_chat import ExtractiveMockChatModel
 from .models.rag import RagPipeline
 from .models.retrieval import VectorRetriever
 from .models.runlog import RunLog
-from .models.sources import load_snapshot
+from .models.sources import Project, load_project
 
 
 def build_chat_model(settings: Settings) -> ChatModel:
@@ -35,12 +35,17 @@ def build_embeddings(settings: Settings) -> Embeddings:
     return FastEmbedEmbeddings(settings.embedding_model)
 
 
-def build_retriever(settings: Settings, embeddings: Embeddings | None = None) -> VectorRetriever:
-    documents = load_snapshot(settings.manifest_path)
+def build_project(settings: Settings) -> Project:
+    return load_project(settings.project_path)
+
+
+def build_retriever(settings: Settings, embeddings: Embeddings | None = None,
+                    project: Project | None = None) -> VectorRetriever:
+    project = project or build_project(settings)
     chunker = MarkdownChunker(chunk_size=settings.chunk_size)
-    chunks = [chunk for doc in documents for chunk in chunker.split(doc)]
+    chunks = [chunk for doc in project.documents for chunk in chunker.split(doc)]
     retriever = VectorRetriever(embeddings or build_embeddings(settings))
-    retriever.index(documents, chunks)
+    retriever.index(project.documents, chunks)
     return retriever
 
 
@@ -60,8 +65,11 @@ def build_langchain_chat(settings: Settings) -> BaseChatModel:
     )
 
 
-def build_rag(settings: Settings, retriever: VectorRetriever | None = None) -> RagPipeline:
-    return RagPipeline(retriever or build_retriever(settings), build_langchain_chat(settings), k=settings.top_k)
+def build_rag(settings: Settings, retriever: VectorRetriever | None = None,
+              project: Project | None = None) -> RagPipeline:
+    project = project or build_project(settings)
+    return RagPipeline(retriever or build_retriever(settings, project=project), build_langchain_chat(settings),
+                       covered_versions=project.versions, k=settings.top_k)
 
 
 def build_run_log() -> RunLog:

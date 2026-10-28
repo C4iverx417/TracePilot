@@ -26,7 +26,7 @@ from tracepilot.models.documents import SearchHit, SourceDocument, sha256
 from tracepilot.models.retrieval import VectorRetriever
 from tracepilot.models.sources import SourceError, load_snapshot
 
-REAL_MANIFEST = Path("data/sources/pydantic/manifest.json")
+REAL_MANIFEST = Path("data/sources/pydantic/v2.14.1/manifest.json")
 
 SAMPLE = """Intro paragraph.
 
@@ -95,10 +95,10 @@ class SourcesTest(unittest.TestCase):
     def test_tampered_file_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "pydantic"
-            shutil.copytree(REAL_MANIFEST.parent, copy)
-            (copy / "snapshot/docs/concepts/config.md").write_text("edited", encoding="utf-8")
+            shutil.copytree(REAL_MANIFEST.parent.parent, copy)
+            (copy / "v2.14.1/snapshot/docs/concepts/config.md").write_text("edited", encoding="utf-8")
             with self.assertRaises(SourceError):
-                load_snapshot(copy / "manifest.json")
+                load_snapshot(copy / "v2.14.1/manifest.json")
 
     def test_missing_manifest(self):
         with self.assertRaises(SourceError):

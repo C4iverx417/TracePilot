@@ -50,6 +50,8 @@ def enforce_outcome(draft: AnswerDraft) -> Tuple[AnswerDraft, List[str]]:
     supported = [f for f in draft.findings if f.citation_ids]
     unsupported = [f.text for f in draft.findings if not f.citation_ids]
     outcome = draft.outcome
+    if outcome not in ("answered", "partially_answered", "insufficient_evidence"):
+        outcome = "partially_answered" if supported else "insufficient_evidence"  # server-only outcomes
     if outcome in ("answered", "partially_answered") and not supported:
         outcome = "insufficient_evidence"
     elif outcome == "answered" and unsupported:

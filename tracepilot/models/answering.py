@@ -20,7 +20,9 @@ from pydantic import BaseModel, Field, ValidationError
 from .documents import SearchHit
 from .llm import InvalidModelOutputError, Usage
 
-Outcome = Literal["answered", "partially_answered", "insufficient_evidence"]
+# The model may only propose the first three; the last three are decided by the server.
+Outcome = Literal["answered", "partially_answered", "insufficient_evidence",
+                  "insufficient_context", "unsupported_version", "conflicting_evidence"]
 
 
 # ---------------------------------------------------------------- schema the model must follow
@@ -66,6 +68,7 @@ class Answer:
     model: str
     latency_ms: int
     usage: Usage
+    target_version: str | None = None
     unsupported_claims: List[str] = field(default_factory=list)
     suspicious_evidence_ids: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)

@@ -1,0 +1,5 @@
+{
+  "project_id": "pydantic",
+  "display_name": "Pydantic",
+  "snapshots": ["v1.10.26/manifest.json", "v2.14.1/manifest.json"]
+}

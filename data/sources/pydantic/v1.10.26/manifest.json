@@ -1,0 +1,18 @@
+{
+  "project_id": "pydantic",
+  "snapshot_id": "pydantic-v1.10.26",
+  "version": "1.10.26",
+  "version_evidence": {
+    "kind": "git_tag",
+    "repo": "pydantic/pydantic",
+    "tag": "v1.10.26",
+    "commit": "d771df98f3194ea2695a6a893e318b32381032c3"
+  },
+  "license": "MIT (c) Samuel Colvin and other contributors; see https://github.com/pydantic/pydantic/blob/v1.10.26/LICENSE",
+  "documents": [
+    {"document_id": "pydantic-v1-usage-models", "title": "Models", "source_type": "official_doc", "repo_path": "docs/usage/models.md"},
+    {"document_id": "pydantic-v1-usage-validators", "title": "Validators", "source_type": "official_doc", "repo_path": "docs/usage/validators.md"},
+    {"document_id": "pydantic-v1-usage-model-config", "title": "Model Config", "source_type": "official_doc", "repo_path": "docs/usage/model_config.md"},
+    {"document_id": "pydantic-v1-usage-settings", "title": "Settings management", "source_type": "official_doc", "repo_path": "docs/usage/settings.md"}
+  ]
+}

@@ -9,7 +9,8 @@ U01、U02 按旧流程交付了学习交接卡（见下方），予以保留。
 | U02 | 已验证 | 目标项目 Pydantic v2.14.1；本地 embedding（fastembed + multilingual MiniLM）；内存向量检索 |
 | U03 | 已验证 | 基础 RAG：检索 → 提示词（证据块 + 规则）→ LangChain chat model → Pydantic schema 解析 → 引用校验；mock 为抽取式假模型 |
 | U04 | 已验证 | 服务端确定性规则决定 outcome（answered / partially_answered / insufficient_evidence）；无检索结果不调用模型；可疑指令型资料标记；输出脱敏 |
-| U05–U15 | 未开始 | |
+| U05 | 已验证 | 两个版本 1.10.26 / 2.14.1（git tag 证据）；版本输入解析；先过滤后排序；unsupported_version / insufficient_context 不调用模型 |
+| U06–U15 | 未开始 | |
 
 ---
 
@@ -183,3 +184,12 @@ manifest.json + snapshot/*.md → load_snapshot (校验 SHA-256) → SourceDocum
 - **关键设计：** 模型自报的 outcome 只能被服务端**降级**，不能升级；“引用存在”由代码校验，“引用是否真的支持结论”仍需人工或评估（U15）。提示词规则 3 要求把资料中的指令当作内容描述。
 - **验证：** 42 个测试通过，固定样例：可回答 → answered 且有引用；知识库外 → insufficient_evidence 且无引用；恶意资料 → 被标记、输出提示“treated as data”。另测：模型捏造 `c99` 的“answered”被降级为 insufficient_evidence。
 - **限制：** 指令识别是关键词正则，只能覆盖常见写法；mock 仍可能把恶意句子当作“文档内容”引用（描述而非执行），真实模型的遵守情况未验证。仅一次检索，不补检索（U08）。
+
+### U05 —— 用户能获得适用于自己版本的回答（已验证）
+
+- **数据：** 新增 Pydantic **v1.10.26**（commit `d771df9`）4 份文档：Models、Validators、Model Config、Settings management。目录改为 `data/sources/pydantic/<version>/`，`project.json` 列出所有版本快照。v1 文档中的代码示例是构建期 include（`{!.tmp_examples/...!}`），未进入快照。
+- **新增：** `models/versions.py`（版本输入规则）、`sources.load_project`、`VectorRetriever.search(..., version=)`、`RagPipeline.version_gate`、`answer --version`、`search --version`、`devcheck --set u05`。
+- **版本规则：** `2.14.1` / `2.14` / `v1.10` → 精确匹配；`unknown`、空、`latest`、`最新版`、只有主版本号 `2` → insufficient_context（不默认为最新版）；格式正确但未覆盖（`2.5`）→ unsupported_version；格式错误（`abc`）→ INVALID_INPUT。后两类以及 unknown 都**不检索、不调用模型**。
+- **关键设计：** 版本过滤通过 `InMemoryVectorStore` 的 `filter` 在计算相似度**之前**剔除不匹配的块（已读源码确认），而不是靠提示词让模型“注意版本”。每个块在向量库的 metadata 里带 `version_scope`。
+- **验证：** 52 个测试通过。`devcheck --set u05`：3 组同题不同版本共 6 题，6/6 命中对应版本的章节，**错误版本块 0 个**；`devcheck`（u02 题集，现在固定 2.14.1）仍为 3/4。对照：不加过滤时 “BaseSettings 读取环境变量” 的 top-5 **全部来自 v1**，v2 用户会被误导。同一问题 `--version 1.10` 引用 `allow_mutation = False`，`--version 2.14.1` 引用 v2 的 Faux immutability。
+- **限制：** 没有“通用内容”（`general`）标注；跨版本对比（升级问题）留到 U07；unknown 时一律追问，尚未判断问题是否真的依赖版本（U09）。

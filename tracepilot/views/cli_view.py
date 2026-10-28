@@ -34,10 +34,10 @@ def render_chat_result(result: ChatResult) -> str:
     )
 
 
-def render_index_summary(documents: int, chunks: int, seconds: float, embedding: str, snapshot: str) -> str:
+def render_index_summary(documents: int, chunks: int, seconds: float, embedding: str, coverage: str) -> str:
     return (
         f"Indexed {chunks} chunks from {documents} documents in {seconds:.1f}s\n"
-        f"snapshot: {snapshot}   embedding: {embedding}"
+        f"knowledge base: {coverage}   embedding: {embedding}"
     )
 
 
@@ -76,17 +76,20 @@ def render_dev_results(results: List[DevResult], k: int) -> str:
             verdict = "N/A "
             detail = "no relevant source exists; top-k is returned anyway (U02 cannot refuse)"
         top = r.hits[0].score if r.hits else float("nan")
-        lines.append(f"{verdict} {case.id} [{case.kind}] top1={top:.3f}  {detail}")
+        scope = f" v{case.version}" if case.version else ""
+        lines.append(f"{verdict} {case.id} [{case.kind}{scope}] top1={top:.3f}  {detail}")
         lines.append(f"     Q: {case.question}")
         for hit in r.hits:
-            mark = "*" if hit.rank in r.relevant_ranks else " "
+            mark = "!" if hit.rank in r.wrong_version_ranks else "*" if hit.rank in r.relevant_ranks else " "
             path = " > ".join(hit.chunk.heading_path) or "(intro)"
-            lines.append(f"     {mark}{hit.rank}. {hit.score:.3f} {hit.document.title} > {path}")
+            lines.append(f"     {mark}{hit.rank}. {hit.score:.3f} {hit.document.title} > {path}  [{hit.chunk.version_scope}]")
         lines.append("")
     graded = [r for r in results if r.case.expected]
     passed = sum(r.passed for r in graded)
+    mixed = sum(len(r.wrong_version_ranks) for r in results)
     lines.append(f"{passed}/{len(graded)} answerable questions found their labelled section in the top-{k}.")
-    lines.append("This is a 5-question sanity check, not an accuracy measurement.")
+    lines.append(f"Chunks from a non-matching version in any top-{k}: {mixed}")
+    lines.append(f"This is a {len(results)}-question sanity check, not an accuracy measurement.")
     return "\n".join(lines)
 
 
@@ -94,6 +97,9 @@ OUTCOME_LABELS = {
     "answered": "ANSWERED",
     "partially_answered": "PARTIALLY ANSWERED",
     "insufficient_evidence": "INSUFFICIENT EVIDENCE - the knowledge base does not cover this",
+    "insufficient_context": "NEED MORE INFORMATION",
+    "unsupported_version": "UNSUPPORTED VERSION",
+    "conflicting_evidence": "CONFLICTING EVIDENCE",
 }
 
 
@@ -106,7 +112,8 @@ def render_context(messages) -> str:
 
 def render_answer(answer: Answer, run_path: str | None = None) -> str:
     d = answer.draft
-    lines = [f"[{OUTCOME_LABELS.get(d.outcome, d.outcome.upper())}]", "", d.summary, ""]
+    version = f"   version: {answer.target_version}" if answer.target_version else ""
+    lines = [f"[{OUTCOME_LABELS.get(d.outcome, d.outcome.upper())}]{version}", "", d.summary, ""]
     if d.findings:
         lines.append("Findings (from the documentation):")
         for f in d.findings:

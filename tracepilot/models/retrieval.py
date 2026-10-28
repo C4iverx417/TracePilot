@@ -8,13 +8,14 @@ The store lives only in this process. Nothing is written to disk (PRD U02).
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import InMemoryVectorStore
 
 from .documents import Chunk, SearchHit, SourceDocument
+from .versions import scope_matches
 
 
 def embedding_text(chunk: Chunk, doc: SourceDocument) -> str:
@@ -53,20 +54,24 @@ class VectorRetriever:
                 Document(
                     id=chunk.chunk_id,
                     page_content=embedding_text(chunk, self._documents[chunk.document_id]),
-                    metadata={"chunk_id": chunk.chunk_id},
+                    metadata={"chunk_id": chunk.chunk_id, "version_scope": chunk.version_scope},
                 )
             )
         if batch:
             self._store.add_documents(batch)
 
-    def search(self, query: str, k: int) -> List[SearchHit]:
+    def search(self, query: str, k: int, version: Optional[str] = None) -> List[SearchHit]:
+        """Top-k chunks. With `version`, non-matching chunks are removed BEFORE ranking (PRD 6.4 rule 4)."""
         if not query.strip():
             raise ValueError("query is empty")
         if k < 1:
             raise ValueError("k must be >= 1")
         if not self._chunks:
             return []
-        results = self._store.similarity_search_with_score(query, k=k)
+        version_filter = None
+        if version is not None:
+            version_filter = lambda doc: scope_matches(doc.metadata["version_scope"], version)  # noqa: E731
+        results = self._store.similarity_search_with_score(query, k=k, filter=version_filter)
         hits = []
         for rank, (document, score) in enumerate(results, start=1):
             chunk = self._chunks[document.metadata["chunk_id"]]

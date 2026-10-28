@@ -8,8 +8,9 @@ rejected, so what we index is exactly what was recorded.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 from .documents import SourceDocument, sha256
 
@@ -57,3 +58,33 @@ def load_snapshot(manifest_path: Path) -> List[SourceDocument]:
             )
         )
     return documents
+
+
+@dataclass(frozen=True)
+class Project:
+    project_id: str
+    display_name: str
+    versions: Tuple[str, ...]  # covered versions, oldest first
+    documents: Tuple[SourceDocument, ...]
+    snapshot_ids: Tuple[str, ...]
+
+
+def load_project(project_path: Path) -> Project:
+    """Load every version snapshot listed in project.json."""
+    if not project_path.is_file():
+        raise SourceError(f"Project file not found: {project_path}")
+    config = json.loads(project_path.read_text(encoding="utf-8"))
+    documents: List[SourceDocument] = []
+    versions, snapshots = [], []
+    for relative in config["snapshots"]:
+        manifest_path = project_path.parent / relative
+        docs = load_snapshot(manifest_path)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest["project_id"] != config["project_id"]:
+            raise SourceError(f"{relative}: project_id does not match {config['project_id']}")
+        if manifest["version"] in versions:
+            raise SourceError(f"{relative}: version {manifest['version']} listed twice")
+        versions.append(manifest["version"])
+        snapshots.append(manifest["snapshot_id"])
+        documents.extend(docs)
+    return Project(config["project_id"], config["display_name"], tuple(versions), tuple(documents), tuple(snapshots))
