@@ -1,11 +1,12 @@
 # 开发与学习进度
 
-状态流转：未开始 → 当前开发 → 代码已验证/等待用户研究 → 用户已复述/待巩固 → 用户明确授权下一步
+状态流转（PRD v1.3 起）：未开始 → 开发中 → 已验证；U15 后交付 `docs/learning-guide.md`，用户统一研究。
+U01、U02 按旧流程交付了学习交接卡（见下方），予以保留。
 
 | 单位 | 状态 | 备注 |
 |---|---|---|
-| U01 | 用户选择继续，理解情况未完整验证（2026-10-27） | 生成模型暂用 mock；U02 中按 MVC 重组：`llm.py` → `models/llm.py`，`cli.py` 拆成 `controllers/cli.py` + `views/cli_view.py`，命令改为 `tracepilot ask` |
-| U02 | 代码已验证 / 等待用户研究 | 目标项目 Pydantic v2.14.1；本地 embedding（fastembed + multilingual MiniLM）；内存向量检索 |
+| U01 | 已验证 | 生成模型暂用 mock；U02 中按 MVC 重组：`llm.py` → `models/llm.py`，`cli.py` 拆成 `controllers/cli.py` + `views/cli_view.py`，命令改为 `tracepilot ask` |
+| U02 | 已验证 | 目标项目 Pydantic v2.14.1；本地 embedding（fastembed + multilingual MiniLM）；内存向量检索 |
 | U03–U15 | 未开始 | |
 
 ---
