@@ -13,6 +13,7 @@ from typing import Dict, Optional
 
 SUPPORTED_PROVIDERS = ("mock", "openai")
 SUPPORTED_EMBEDDINGS = ("fastembed", "fake")
+SUPPORTED_RETRIEVAL = ("hybrid", "vector", "keyword")
 
 
 class ConfigError(Exception):
@@ -45,6 +46,8 @@ class Settings:
     embedding_model: str
     chunk_size: int
     top_k: int
+    retrieval: str
+    candidates: int
     project_path: Path
     # repr=False: printing Settings never shows the key.
     api_key: Optional[str] = field(default=None, repr=False)
@@ -93,6 +96,12 @@ def load_settings(env: Optional[Dict[str, str]] = None, dotenv_path: Optional[Pa
             f"Unknown TRACEPILOT_EMBEDDING={embedding!r}; choose one of {', '.join(SUPPORTED_EMBEDDINGS)}"
         )
 
+    retrieval = env.get("TRACEPILOT_RETRIEVAL", "hybrid").strip().lower()
+    if retrieval not in SUPPORTED_RETRIEVAL:
+        raise ConfigError(
+            f"Unknown TRACEPILOT_RETRIEVAL={retrieval!r}; choose one of {', '.join(SUPPORTED_RETRIEVAL)}"
+        )
+
     max_tokens = _get_positive_int(env, "TRACEPILOT_MAX_TOKENS", 512)
 
     return Settings(
@@ -107,7 +116,9 @@ def load_settings(env: Optional[Dict[str, str]] = None, dotenv_path: Optional[Pa
             "TRACEPILOT_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         ),
         chunk_size=_get_positive_int(env, "TRACEPILOT_CHUNK_SIZE", 400),
-        top_k=_get_positive_int(env, "TRACEPILOT_TOP_K", 5),
+        top_k=_get_positive_int(env, "TRACEPILOT_TOP_K", 8),  # PRD FR-04: at most 8 chunks reach the model
+        retrieval=retrieval,
+        candidates=_get_positive_int(env, "TRACEPILOT_CANDIDATES", 20),  # per retriever, before fusion
         project_path=Path(env.get("TRACEPILOT_PROJECT", "data/sources/pydantic/project.json")),
         api_key=api_key,
     )

@@ -6,7 +6,9 @@ implementations themselves (dependency inversion, PRD 10.3).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Dict
 
 from langchain_core.embeddings import DeterministicFakeEmbedding, Embeddings
 from langchain_core.language_models import BaseChatModel
@@ -17,7 +19,8 @@ from .models.embeddings import FastEmbedEmbeddings
 from .models.llm import ChatModel, MockClient, OpenAICompatibleClient
 from .models.mock_chat import ExtractiveMockChatModel
 from .models.rag import RagPipeline
-from .models.retrieval import VectorRetriever
+from .models.keyword import KeywordRetriever
+from .models.retrieval import HybridRetriever, Retriever, VectorRetriever
 from .models.runlog import RunLog
 from .models.sources import Project, load_project
 
@@ -39,14 +42,40 @@ def build_project(settings: Settings) -> Project:
     return load_project(settings.project_path)
 
 
-def build_retriever(settings: Settings, embeddings: Embeddings | None = None,
-                    project: Project | None = None) -> VectorRetriever:
+@dataclass(frozen=True)
+class KnowledgeIndex:
+    project: Project
+    retriever: Retriever
+    chunk_count: int
+    mode: str
+
+
+def build_index(settings: Settings, embeddings: Embeddings | None = None,
+                project: Project | None = None) -> KnowledgeIndex:
     project = project or build_project(settings)
     chunker = MarkdownChunker(chunk_size=settings.chunk_size)
     chunks = [chunk for doc in project.documents for chunk in chunker.split(doc)]
-    retriever = VectorRetriever(embeddings or build_embeddings(settings))
-    retriever.index(project.documents, chunks)
-    return retriever
+
+    channels: Dict[str, Retriever] = {}
+    if settings.retrieval in ("vector", "hybrid"):
+        vector = VectorRetriever(embeddings or build_embeddings(settings))
+        vector.index(project.documents, chunks)
+        channels["vector"] = vector
+    if settings.retrieval in ("keyword", "hybrid"):
+        keyword = KeywordRetriever()
+        keyword.index(project.documents, chunks)
+        channels["bm25"] = keyword
+
+    if settings.retrieval == "hybrid":
+        retriever: Retriever = HybridRetriever(channels, candidates=settings.candidates)
+    else:
+        retriever = next(iter(channels.values()))
+    return KnowledgeIndex(project, retriever, len({c.chunk_id for c in chunks}), settings.retrieval)
+
+
+def build_retriever(settings: Settings, embeddings: Embeddings | None = None,
+                    project: Project | None = None) -> Retriever:
+    return build_index(settings, embeddings, project).retriever
 
 
 def build_langchain_chat(settings: Settings) -> BaseChatModel:
@@ -65,7 +94,7 @@ def build_langchain_chat(settings: Settings) -> BaseChatModel:
     )
 
 
-def build_rag(settings: Settings, retriever: VectorRetriever | None = None,
+def build_rag(settings: Settings, retriever: Retriever | None = None,
               project: Project | None = None) -> RagPipeline:
     project = project or build_project(settings)
     return RagPipeline(retriever or build_retriever(settings, project=project), build_langchain_chat(settings),

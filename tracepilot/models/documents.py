@@ -47,6 +47,7 @@ class Chunk:
 @dataclass(frozen=True)
 class SearchHit:
     rank: int
-    score: float  # cosine similarity; higher = closer in embedding space, NOT "correct"
+    score: float  # meaning depends on the retriever (cosine / BM25 / RRF); higher = closer, NOT "correct"
     chunk: Chunk
     document: SourceDocument
+    channels: Tuple[str, ...] = ()  # which retrievers found it, e.g. ("vector#3", "bm25#1")

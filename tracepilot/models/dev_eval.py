@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from .documents import SearchHit
-from .retrieval import VectorRetriever
+from .retrieval import Retriever
 from .versions import scope_matches
 
 
@@ -62,7 +62,7 @@ def wrong_version(hit: SearchHit, case: DevQuestion) -> bool:
     return case.version is not None and not scope_matches(hit.chunk.version_scope, case.version)
 
 
-def run(retriever: VectorRetriever, questions: List[DevQuestion], k: int) -> List[DevResult]:
+def run(retriever: Retriever, questions: List[DevQuestion], k: int) -> List[DevResult]:
     results = []
     for case in questions:
         hits = retriever.search(case.question, k, version=case.version)

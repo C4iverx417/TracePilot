@@ -137,7 +137,7 @@ class AnswerCliTest(unittest.TestCase):
         self.assertIn("===== SYSTEM =====", out.getvalue())
         self.assertEqual(len(records), 1)
         self.assertIsNone(record["estimated_cost_usd"])
-        self.assertEqual(len(record["retrieved"]), 5)
+        self.assertEqual(len(record["retrieved"]), 8)
 
 
 if __name__ == "__main__":

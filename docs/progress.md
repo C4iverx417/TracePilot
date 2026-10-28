@@ -10,7 +10,8 @@ U01、U02 按旧流程交付了学习交接卡（见下方），予以保留。
 | U03 | 已验证 | 基础 RAG：检索 → 提示词（证据块 + 规则）→ LangChain chat model → Pydantic schema 解析 → 引用校验；mock 为抽取式假模型 |
 | U04 | 已验证 | 服务端确定性规则决定 outcome（answered / partially_answered / insufficient_evidence）；无检索结果不调用模型；可疑指令型资料标记；输出脱敏 |
 | U05 | 已验证 | 两个版本 1.10.26 / 2.14.1（git tag 证据）；版本输入解析；先过滤后排序；unsupported_version / insufficient_context 不调用模型 |
-| U06–U15 | 未开始 | |
+| U06 | 已验证 | BM25（自实现）+ 向量，RRF 融合；`Retriever` 接口；`--retrieval` 可切换基线；默认 top_k=8 |
+| U07–U15 | 未开始 | |
 
 ---
 
@@ -193,3 +194,19 @@ manifest.json + snapshot/*.md → load_snapshot (校验 SHA-256) → SourceDocum
 - **关键设计：** 版本过滤通过 `InMemoryVectorStore` 的 `filter` 在计算相似度**之前**剔除不匹配的块（已读源码确认），而不是靠提示词让模型“注意版本”。每个块在向量库的 metadata 里带 `version_scope`。
 - **验证：** 52 个测试通过。`devcheck --set u05`：3 组同题不同版本共 6 题，6/6 命中对应版本的章节，**错误版本块 0 个**；`devcheck`（u02 题集，现在固定 2.14.1）仍为 3/4。对照：不加过滤时 “BaseSettings 读取环境变量” 的 top-5 **全部来自 v1**，v2 用户会被误导。同一问题 `--version 1.10` 引用 `allow_mutation = False`，`--version 2.14.1` 引用 v2 的 Faux immutability。
 - **限制：** 没有“通用内容”（`general`）标注；跨版本对比（升级问题）留到 U07；unknown 时一律追问，尚未判断问题是否真的依赖版本（U09）。
+
+### U06 —— 用户能用错误原文找到排查依据（已验证）
+
+- **新增：** `models/keyword.py`（BM25，公式写在文件头；标识符不拆分，`allow_mutation` 是一个词）、`HybridRetriever`（RRF：`1/(60+rank)` 求和，只用排名，不需要两种分数同量纲）、`Retriever` Protocol（有了第二个实现才抽象）、`SearchHit.channels`（显示每块来自 `vector#3`、`bm25#1` 等）、`--retrieval hybrid|vector|keyword`、devcheck 输出 MRR。
+- **参数：** 每路候选 20，融合去重后取 top_k=8 进上下文（PRD FR-04，默认值由 5 改为 8）。BM25 的 IDF 在**版本过滤后的集合**上计算。
+- **验证（top-8，60 个测试通过）：**
+
+| 题集 | vector | keyword (BM25) | hybrid |
+|---|---|---|---|
+| u06（5 精确词 + 5 语义改写） | 10/10，MRR 0.702 | 9/10，MRR 0.667 | 9/10，MRR **0.833** |
+| u05（版本对） | 6/6，MRR 0.722 | 6/6，MRR 0.711 | 6/6，MRR **0.833** |
+| u02 | 4/4，MRR 0.786 | 2/4，MRR 0.542 | 4/4，MRR **0.833** |
+
+  所有配置错误版本块均为 0。
+- **解读：** 混合检索把正确块**排得更靠前**（如 u06-s1 不可变问题：向量第 7 → 混合第 3；u06-s5：第 8 → 第 1），但 u06-s4（“validator 抛 type error 还算不算 validation error”）向量排第 4，BM25 前 20 没有它，融合后被两路都命中的块挤出 top-8——RRF 的已知弱点。BM25 对中文问题完全无效（无共同词），全靠向量通道。题量 20 道，**不能据此宣称混合检索更好**（PRD 13.2）。
+- **限制：** 无重排器（P1）；没有调 RRF 常数和候选量。

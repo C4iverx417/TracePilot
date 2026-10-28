@@ -56,12 +56,13 @@ def render_hits(query: str, hits: List[SearchHit], full: bool = False) -> str:
         c, d = hit.chunk, hit.document
         lines += [
             f"[{hit.rank}] score={hit.score:.3f}  {d.title} > {' > '.join(c.heading_path) or '(intro)'}",
-            f"    chunk: {c.chunk_id}   {c.locator}   version: {c.version_scope}",
+            f"    chunk: {c.chunk_id}   {c.locator}   version: {c.version_scope}"
+            + (f"   via: {', '.join(hit.channels)}" if hit.channels else ""),
             f"    source: {d.canonical_url}",
             _snippet(c.content, full),
             "",
         ]
-    lines.append("score = cosine similarity of embeddings. High score means 'similar text', not 'correct answer'.")
+    lines.append("score = cosine (vector), BM25 (keyword) or RRF (hybrid). High score means 'similar', not 'correct'.")
     return "\n".join(lines)
 
 
@@ -87,7 +88,9 @@ def render_dev_results(results: List[DevResult], k: int) -> str:
     graded = [r for r in results if r.case.expected]
     passed = sum(r.passed for r in graded)
     mixed = sum(len(r.wrong_version_ranks) for r in results)
+    mrr = sum(1 / r.relevant_ranks[0] for r in graded if r.relevant_ranks) / len(graded) if graded else 0.0
     lines.append(f"{passed}/{len(graded)} answerable questions found their labelled section in the top-{k}.")
+    lines.append(f"MRR (mean of 1/rank of the first relevant chunk, 0 if none): {mrr:.3f}")
     lines.append(f"Chunks from a non-matching version in any top-{k}: {mixed}")
     lines.append(f"This is a {len(results)}-question sanity check, not an accuracy measurement.")
     return "\n".join(lines)

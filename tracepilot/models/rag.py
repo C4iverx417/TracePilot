@@ -11,7 +11,7 @@ from .answering import Answer, AnswerDraft, attach_citations, build_messages, la
 from .chat import invoke_chat
 from .guards import enforce_outcome, redact_draft, suspicious_evidence
 from .llm import Usage
-from .retrieval import VectorRetriever
+from .retrieval import Retriever
 from .versions import VersionChoice, parse_version
 
 
@@ -24,7 +24,7 @@ def no_call_answer(question: str, outcome: str, summary: str, missing: List[str]
 
 
 class RagPipeline:
-    def __init__(self, retriever: VectorRetriever, chat_model: BaseChatModel,
+    def __init__(self, retriever: Retriever, chat_model: BaseChatModel,
                  covered_versions: Sequence[str] = (), k: int = 5):
         self.retriever = retriever
         self.chat_model = chat_model

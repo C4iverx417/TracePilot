@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from .. import app
-from ..config import ConfigError, Settings, load_settings
+from ..config import SUPPORTED_RETRIEVAL, ConfigError, Settings, load_settings
 from ..models import dev_eval, runlog
 from ..models.llm import ModelError, build_messages, build_payload
-from ..models.retrieval import VectorRetriever
+from ..models.retrieval import Retriever
 from ..models.sources import Project, SourceError
 from ..models.versions import InvalidVersionError, parse_version
 from ..views import cli_view
@@ -54,18 +54,18 @@ def cmd_ask(args, settings: Settings) -> int:
     return 0
 
 
-def _build_index(settings: Settings) -> Tuple[Project, VectorRetriever]:
+def _build_index(settings: Settings) -> Tuple[Project, Retriever]:
     print("Building in-memory index (first run downloads the embedding model)...", file=sys.stderr)
     start = time.monotonic()
-    project = app.build_project(settings)
-    retriever = app.build_retriever(settings, project=project)
+    index = app.build_index(settings)
     embedding = settings.embedding_model if settings.embedding == "fastembed" else "fake (no semantics)"
     summary = cli_view.render_index_summary(
-        retriever.document_count, retriever.size, time.monotonic() - start, embedding,
-        f"{project.display_name} {', '.join(project.versions)}",
+        len(index.project.documents), index.chunk_count, time.monotonic() - start,
+        f"{embedding}   retrieval: {index.mode}",
+        f"{index.project.display_name} {', '.join(index.project.versions)}",
     )
     print(summary, file=sys.stderr)
-    return project, retriever
+    return index.project, index.retriever
 
 
 def _search_version(raw: Optional[str], project: Project) -> Optional[str]:
@@ -155,11 +155,13 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("-k", type=int, help="How many chunks to return (default TRACEPILOT_TOP_K).")
     search.add_argument("--full", action="store_true", help="Print whole chunks instead of snippets.")
     search.add_argument("--version", help="Only search documentation for this covered version, e.g. 2.14.1.")
+    search.add_argument("--retrieval", choices=SUPPORTED_RETRIEVAL, help="Override TRACEPILOT_RETRIEVAL.")
     search.set_defaults(handler=cmd_search)
 
     check = sub.add_parser("devcheck", help="Run a set of labelled development questions.")
     check.add_argument("--set", default="u02", help="Question file under data/dev_questions/ (default u02).")
     check.add_argument("-k", type=int, help="Top-k to evaluate (default TRACEPILOT_TOP_K).")
+    check.add_argument("--retrieval", choices=SUPPORTED_RETRIEVAL, help="Override TRACEPILOT_RETRIEVAL.")
     check.set_defaults(handler=cmd_devcheck)
     answer = sub.add_parser("answer", help="Answer a question from the documentation, with citations.")
     answer.add_argument("question")
@@ -167,17 +169,21 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Your Pydantic version, e.g. 2.14.1 or 1.10; 'unknown' if unsure (default).")
     answer.add_argument("-k", type=int, help="How many chunks to give the model (default TRACEPILOT_TOP_K).")
     answer.add_argument("--show-context", action="store_true", help="Print the exact prompt sent to the model.")
+    answer.add_argument("--retrieval", choices=SUPPORTED_RETRIEVAL, help="Override TRACEPILOT_RETRIEVAL.")
     answer.set_defaults(handler=cmd_answer)
     return parser
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    overrides = {}
+    if getattr(args, "retrieval", None):
+        overrides["retrieval"] = args.retrieval
     if getattr(args, "k", None) is not None and args.k < 1:
         print("error [INVALID_INPUT]: -k must be >= 1", file=sys.stderr)
         return 2
     try:
-        settings = load_settings()
+        settings = replace(load_settings(), **overrides)
         return args.handler(args, settings)
     except InputError as exc:
         print(f"error [INVALID_INPUT]: {exc}", file=sys.stderr)
