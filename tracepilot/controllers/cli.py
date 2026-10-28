@@ -4,6 +4,7 @@
     tracepilot search ["question"]       U02: show the most similar source chunks
     tracepilot devcheck                  U02: run the labelled development questions
     tracepilot answer "question" --version 2.14.1   U03-U05: version-filtered retrieval + cited answer
+    tracepilot upgrade "error" --from 1.10 --to 2.14  U07: per-version evidence, migration steps
 """
 
 from __future__ import annotations
@@ -116,27 +117,48 @@ def cmd_devcheck(args, settings: Settings) -> int:
     return 0
 
 
+def _parse(pipeline, raw: str):
+    try:
+        return pipeline.resolve_version(raw)
+    except InvalidVersionError as exc:
+        raise InputError(str(exc)) from None
+
+
+def _finish(args, pipeline, question: str, gated, prepare) -> int:
+    """Shared tail of answer/upgrade: optional prompt dump, model call, run record, render."""
+    answer = gated
+    if answer is None:
+        prepared = prepare()
+        if args.show_context:
+            print(cli_view.render_context(prepared.messages))
+            print()
+        answer = pipeline.generate(question, prepared)
+    run_id = runlog.new_run_id()
+    path = app.build_run_log().save(runlog.answer_record(run_id, answer))
+    print(cli_view.render_answer(answer, str(path)))
+    return 0
+
+
 def cmd_answer(args, settings: Settings) -> int:
     question = validate_question(args.question)
     if args.k:
         settings = replace(settings, top_k=args.k)
     project, retriever = _build_index(settings)
     pipeline = app.build_rag(settings, retriever, project)
-    try:
-        choice = pipeline.resolve_version(args.version)
-    except InvalidVersionError as exc:
-        raise InputError(str(exc)) from None
-    answer = pipeline.version_gate(question, choice)
-    if answer is None:
-        evidence, messages = pipeline.prepare(question, choice.version)
-        if args.show_context:
-            print(cli_view.render_context(messages))
-            print()
-        answer = pipeline.generate(question, evidence, messages, choice.version)
-    run_id = runlog.new_run_id()
-    path = app.build_run_log().save(runlog.answer_record(run_id, answer))
-    print(cli_view.render_answer(answer, str(path)))
-    return 0
+    choice = _parse(pipeline, args.version)
+    return _finish(args, pipeline, question, pipeline.version_gate(question, choice),
+                   lambda: pipeline.prepare(question, choice.version))
+
+
+def cmd_upgrade(args, settings: Settings) -> int:
+    question = validate_question(args.question)
+    if args.k:
+        settings = replace(settings, top_k=args.k)
+    project, retriever = _build_index(settings)
+    pipeline = app.build_rag(settings, retriever, project)
+    before, after = _parse(pipeline, args.from_version), _parse(pipeline, args.to_version)
+    return _finish(args, pipeline, question, pipeline.compare_gate(question, before, after),
+                   lambda: pipeline.prepare_compare(question, before.version, after.version))
 
 
 # ---------------------------------------------------------------- entry point
@@ -171,6 +193,15 @@ def build_parser() -> argparse.ArgumentParser:
     answer.add_argument("--show-context", action="store_true", help="Print the exact prompt sent to the model.")
     answer.add_argument("--retrieval", choices=SUPPORTED_RETRIEVAL, help="Override TRACEPILOT_RETRIEVAL.")
     answer.set_defaults(handler=cmd_answer)
+
+    upgrade = sub.add_parser("upgrade", help="Explain what changed between two versions for a problem.")
+    upgrade.add_argument("question", help="The error text or problem after upgrading.")
+    upgrade.add_argument("--from", dest="from_version", required=True, help="Version before the upgrade.")
+    upgrade.add_argument("--to", dest="to_version", required=True, help="Version after the upgrade.")
+    upgrade.add_argument("-k", type=int, help="Total chunks given to the model, split between the versions.")
+    upgrade.add_argument("--show-context", action="store_true", help="Print the exact prompt sent to the model.")
+    upgrade.add_argument("--retrieval", choices=SUPPORTED_RETRIEVAL, help="Override TRACEPILOT_RETRIEVAL.")
+    upgrade.set_defaults(handler=cmd_upgrade)
     return parser
 
 

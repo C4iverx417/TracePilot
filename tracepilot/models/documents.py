@@ -4,11 +4,24 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Optional, Tuple
 
 
 def sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class IssueMeta:
+    """Hand-curated facts about a GitHub issue (PRD 6.5). 'closed' alone never means 'solved'."""
+
+    number: int
+    resolution_status: str  # answered | fixed | workaround | not_planned | unresolved
+    resolved_by_role: str  # GitHub author_association of the resolving comment
+    resolution_url: str
+    resolution_summary: str
+    version_basis: str
+    conflicts_with: Tuple[str, ...] = ()  # document_ids this issue says are wrong
 
 
 @dataclass(frozen=True)
@@ -25,6 +38,7 @@ class SourceDocument:
     version_evidence: str  # e.g. "git_tag v2.14.1 @ b2212c7..."
     status: str  # active | withdrawn
     text: str
+    issue: Optional[IssueMeta] = None
 
 
 @dataclass(frozen=True)

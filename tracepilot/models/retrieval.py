@@ -25,8 +25,34 @@ def embedding_text(chunk: Chunk, doc: SourceDocument) -> str:
     The heading path gives a short chunk ("Use `frozen=True`...") the context
     that it belongs to e.g. "Models > Faux immutability".
     """
-    location = " > ".join((doc.title,) + chunk.heading_path)
-    return f"{location}\n\n{chunk.content}"
+    return f"{location_text(chunk, doc)}\n\n{chunk.content}"
+
+
+def location_text(chunk: Chunk, doc: SourceDocument) -> str:
+    """'Title > heading > subheading', without repeating the title when it is also the H1."""
+    path = chunk.heading_path
+    if path and path[0] == doc.title:
+        path = path[1:]
+    return " > ".join((doc.title,) + path)
+
+
+def diversify(hits: List[SearchHit], k: int, per_document: int) -> List[SearchHit]:
+    """Keep ranking order but allow at most `per_document` chunks from one document, then re-rank 1..k.
+
+    Without this, one long page (or an issue whose title equals the error text) can fill
+    every context slot and crowd out the documentation that actually explains the change.
+    """
+    taken: Dict[str, int] = {}
+    kept: List[SearchHit] = []
+    for hit in hits:
+        doc_id = hit.chunk.document_id
+        if taken.get(doc_id, 0) >= per_document:
+            continue
+        taken[doc_id] = taken.get(doc_id, 0) + 1
+        kept.append(hit)
+        if len(kept) == k:
+            break
+    return [SearchHit(rank, h.score, h.chunk, h.document, h.channels) for rank, h in enumerate(kept, start=1)]
 
 
 class Retriever(Protocol):

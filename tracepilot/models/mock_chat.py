@@ -36,7 +36,7 @@ def _coverage(question_terms: set, body: str) -> float:
 def _first_sentence(body: str) -> str:
     for line in body.splitlines():
         line = line.strip()
-        if line and not line.startswith(("#", "```", "!!!", "???", "|", "<")):
+        if line and not line.startswith(("#", "```", "!!!", "???", "|", "<", "[curated note", "- ")):
             sentence = re.split(r"(?<=[.!?])\s", line)[0]
             return sentence[:240]
     return body.strip().splitlines()[0][:240] if body.strip() else ""

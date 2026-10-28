@@ -98,7 +98,7 @@ def build_rag(settings: Settings, retriever: Retriever | None = None,
               project: Project | None = None) -> RagPipeline:
     project = project or build_project(settings)
     return RagPipeline(retriever or build_retriever(settings, project=project), build_langchain_chat(settings),
-                       covered_versions=project.versions, k=settings.top_k)
+                       covered_versions=project.versions, k=settings.top_k, per_document=settings.per_document)
 
 
 def build_run_log() -> RunLog:

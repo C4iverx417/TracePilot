@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import Dict, List, Tuple
 
-from .answering import AnswerDraft
+from .answering import AnswerDraft, Finding
 from .documents import SearchHit
 
 _INSTRUCTION_LIKE = re.compile(
@@ -57,3 +57,34 @@ def enforce_outcome(draft: AnswerDraft) -> Tuple[AnswerDraft, List[str]]:
     elif outcome == "answered" and unsupported:
         outcome = "partially_answered"
     return draft.model_copy(update={"findings": supported, "outcome": outcome}), unsupported
+
+
+def split_historical(draft: AnswerDraft, evidence: Dict[str, SearchHit]) -> Tuple[AnswerDraft, List[Finding]]:
+    """Findings backed ONLY by issues are historical cases, not documented facts (PRD FR-06, AT-10).
+
+    If nothing documented remains, an "answered" draft becomes "partially_answered": a similar
+    case is a lead to verify, not a confirmed root cause.
+    """
+    def documented(f: Finding) -> bool:
+        return any(evidence[cid].document.source_type != "issue" for cid in f.citation_ids)
+
+    facts = [f for f in draft.findings if documented(f)]
+    cases = [f for f in draft.findings if not documented(f)]
+    outcome = draft.outcome
+    if cases and not facts and outcome == "answered":
+        outcome = "partially_answered"
+    return draft.model_copy(update={"findings": facts, "outcome": outcome}), cases
+
+
+def find_conflicts(evidence: Dict[str, SearchHit]) -> List[Tuple[str, str]]:
+    """(issue evidence id, document evidence id) pairs that a curator marked as contradicting."""
+    by_doc: Dict[str, List[str]] = {}
+    for cid, hit in evidence.items():
+        by_doc.setdefault(hit.document.document_id, []).append(cid)
+    pairs = []
+    for cid, hit in evidence.items():
+        issue = hit.document.issue
+        for doc_id in issue.conflicts_with if issue else ():
+            for other in by_doc.get(doc_id, []):
+                pairs.append((cid, other))
+    return pairs

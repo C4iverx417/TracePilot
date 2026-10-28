@@ -1,0 +1,37 @@
+{
+  "pydantic-issue-6777": {
+    "fetched_at": "2026-10-28T02:22:01+00:00",
+    "sha256": "cb366c806c660c680adf84e50ffd8ead4fc9a2f127178608fb389aeb7d47ae3b",
+    "bytes": 3943,
+    "title": "pydantic.errors.PydanticImportError",
+    "html_url": "https://github.com/pydantic/pydantic/issues/6777"
+  },
+  "pydantic-issue-7472": {
+    "fetched_at": "2026-10-28T02:22:02+00:00",
+    "sha256": "bdf285fce14a45e12e00e4177f805b87cc8cbdba23fe3a0c66018d5ba1b43857",
+    "bytes": 1648,
+    "title": "PydanticImportError: `BaseSettings` has been moved to the `pydantic-settings` package.",
+    "html_url": "https://github.com/pydantic/pydantic/issues/7472"
+  },
+  "pydantic-issue-6521": {
+    "fetched_at": "2026-10-28T02:22:03+00:00",
+    "sha256": "7330fe73e61ecb9db757b26398a01871f65b01dfa2bade5fbd2d23f1a1f2fafb",
+    "bytes": 5198,
+    "title": "Invalid BaseSettings Error Doc Link",
+    "html_url": "https://github.com/pydantic/pydantic/issues/6521"
+  },
+  "pydantic-issue-6181": {
+    "fetched_at": "2026-10-28T02:22:03+00:00",
+    "sha256": "69d0635de8f9a36dfd4d380c5ffc7c591fee71f84be107de5650993f63f954d6",
+    "bytes": 4388,
+    "title": "Allow Mutation - Request to re-add",
+    "html_url": "https://github.com/pydantic/pydantic/issues/6181"
+  },
+  "pydantic-issue-11538": {
+    "fetched_at": "2026-10-28T02:22:04+00:00",
+    "sha256": "36e2d4e3846ebacaa563dab94f8641bcc1c12f2387b1d91ee1a2ce2754589502",
+    "bytes": 4146,
+    "title": "Convert any type to any type utility (like V1's `parse_obj_as`)",
+    "html_url": "https://github.com/pydantic/pydantic/issues/11538"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "project_id": "pydantic",
+  "kind": "issues",
+  "snapshot_id": "pydantic-issues-2026-10-28",
+  "repo": "pydantic/pydantic",
+  "curation_note": "Hand-picked closed issues about upgrading from V1 to V2. Version scopes, resolution status and root-cause notes were labelled manually from the issue text; author roles are GitHub author_association values, not guesses.",
+  "documents": [
+    {
+      "number": 6777,
+      "document_id": "pydantic-issue-6777",
+      "version_scope": "range:>=2.0.0,<3.0.0",
+      "version_basis": "Reporter ticked 'I'm using Pydantic V2'.",
+      "resolution": {
+        "status": "answered",
+        "by_role": "CONTRIBUTOR",
+        "evidence_url": "https://github.com/pydantic/pydantic/issues/6777#issuecomment-1644156936",
+        "summary": "BaseSettings moved to the separate pydantic-settings package; install it, or use `from pydantic.v1 import BaseSettings` to keep V1 behaviour."
+      },
+      "conflicts_with": []
+    },
+    {
+      "number": 7472,
+      "document_id": "pydantic-issue-7472",
+      "version_scope": "range:>=2.0.0,<3.0.0",
+      "version_basis": "Reporter's version output shows pydantic 2.3.0.",
+      "resolution": {
+        "status": "answered",
+        "by_role": "CONTRIBUTOR",
+        "evidence_url": "https://github.com/pydantic/pydantic/issues/7472#issuecomment-1722459059",
+        "summary": "Same error text as #6777 but a different root cause: a third-party package (chroma) still required Pydantic <2.0, so the fix was a dependency conflict, not migrating BaseSettings."
+      },
+      "conflicts_with": []
+    },
+    {
+      "number": 6521,
+      "document_id": "pydantic-issue-6521",
+      "version_scope": "range:>=2.0.0,<=2.0.2",
+      "version_basis": "Reported against 2.0.2; later versions not verified, so the scope stops at the reported version.",
+      "resolution": {
+        "status": "fixed",
+        "by_role": "MEMBER",
+        "evidence_url": "https://github.com/pydantic/pydantic/issues/6521#issuecomment-1627238512",
+        "summary": "The documentation link inside the BaseSettings import error was wrong in 2.0.2; maintainers added a redirect (#6527)."
+      },
+      "conflicts_with": []
+    },
+    {
+      "number": 6181,
+      "document_id": "pydantic-issue-6181",
+      "version_scope": "range:>=2.0.0,<3.0.0",
+      "version_basis": "Feature request filed for the V2 release.",
+      "resolution": {
+        "status": "answered",
+        "by_role": "CONTRIBUTOR",
+        "evidence_url": "https://github.com/pydantic/pydantic/issues/6181#issuecomment-1596961767",
+        "summary": "allow_mutation was removed in V2; use the `frozen` config with the inverse meaning (allow_mutation=False is frozen=True). Wording was clarified in PR #6184."
+      },
+      "conflicts_with": []
+    },
+    {
+      "number": 11538,
+      "document_id": "pydantic-issue-11538",
+      "version_scope": "range:>=2.0.0,<3.0.0",
+      "version_basis": "Report compares V1 behaviour with V2.",
+      "resolution": {
+        "status": "not_planned",
+        "by_role": "MEMBER",
+        "evidence_url": "https://github.com/pydantic/pydantic/issues/11538#issuecomment-2713991252",
+        "summary": "V2 no longer validates a model instance as a dict (what V1 parse_obj_as(dict, m) relied on). Closed as not planned; suggested workaround is a before validator."
+      },
+      "conflicts_with": []
+    }
+  ]
+}

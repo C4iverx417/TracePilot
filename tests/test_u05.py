@@ -92,9 +92,9 @@ class RealProjectTest(unittest.TestCase):
     def test_loads_two_versions_with_tag_evidence(self):
         project = load_project(Path("data/sources/pydantic/project.json"))
         self.assertEqual(project.versions, COVERED)
-        scopes = {d.version_scope for d in project.documents}
-        self.assertEqual(scopes, {"exact:1.10.26", "exact:2.14.1"})
-        self.assertTrue(all(d.version_evidence.startswith("git_tag v") for d in project.documents))
+        docs = [d for d in project.documents if d.source_type != "issue"]
+        self.assertEqual({d.version_scope for d in docs}, {"exact:1.10.26", "exact:2.14.1"})
+        self.assertTrue(all(d.version_evidence.startswith("git_tag v") for d in docs))
 
     def test_missing_project_file(self):
         with self.assertRaises(SourceError):

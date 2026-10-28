@@ -11,7 +11,8 @@ U01、U02 按旧流程交付了学习交接卡（见下方），予以保留。
 | U04 | 已验证 | 服务端确定性规则决定 outcome（answered / partially_answered / insufficient_evidence）；无检索结果不调用模型；可疑指令型资料标记；输出脱敏 |
 | U05 | 已验证 | 两个版本 1.10.26 / 2.14.1（git tag 证据）；版本输入解析；先过滤后排序；unsupported_version / insufficient_context 不调用模型 |
 | U06 | 已验证 | BM25（自实现）+ 向量，RRF 融合；`Retriever` 接口；`--retrieval` 可切换基线；默认 top_k=8 |
-| U07–U15 | 未开始 | |
+| U07 | 已验证 | `upgrade --from --to`：两版本分别检索、分组呈现；5 个人工筛选的真实 Issue（GitHub 角色 + 解决证据）；文档事实 / 历史案例分离；冲突机制；每文档最多 2 块 |
+| U08–U15 | 未开始 | |
 
 ---
 
@@ -210,3 +211,13 @@ manifest.json + snapshot/*.md → load_snapshot (校验 SHA-256) → SourceDocum
   所有配置错误版本块均为 0。
 - **解读：** 混合检索把正确块**排得更靠前**（如 u06-s1 不可变问题：向量第 7 → 混合第 3；u06-s5：第 8 → 第 1），但 u06-s4（“validator 抛 type error 还算不算 validation error”）向量排第 4，BM25 前 20 没有它，融合后被两路都命中的块挤出 top-8——RRF 的已知弱点。BM25 对中文问题完全无效（无共同词），全靠向量通道。题量 20 道，**不能据此宣称混合检索更好**（PRD 13.2）。
 - **限制：** 无重排器（P1）；没有调 RRF 常数和候选量。
+
+### U07 —— 用户能了解一次版本升级的变化与排查步骤（已验证）
+
+- **数据：** `data/sources/pydantic/issues/`：5 个已关闭 Issue（#6777、#7472、#6521、#6181、#11538），`scripts/fetch_issues.py` 抓取正文与全部评论，每条评论标注 GitHub `author_association`（MEMBER / CONTRIBUTOR / NONE），**不凭语气判断维护者**。`manifest.json` 中人工标注：版本范围（如 `range:>=2.0.0,<3.0.0`；#6521 只验证到 2.0.2，故不会作为 2.14.1 的证据）、解决状态（answered / fixed / not_planned——#11538 关闭但“不计划修复”，**closed ≠ solved**）、解决证据评论链接、根因备注。
+- **新增：** `IssueMeta`、`load_issue_snapshot`、版本范围 `in_range`、`RagPipeline.compare / prepare_compare`、`guards.split_historical`（只被 Issue 支持的结论 → “相似历史案例”，outcome 最多 partially_answered）、`guards.find_conflicts`（人工标注 `conflicts_with` 的 Issue 与文档同时被引用 → conflicting_evidence）、`retrieval.diversify`（每文档最多 2 块）、`tracepilot upgrade`。证据块新增 `type` 和 `group` 属性，Issue 证据带人工标注的 `[curated note]`。
+- **调试记录：**
+  1. GitHub 正文含 `\r\n`，`read_text` 自动转换换行导致哈希不符；改为按字节读取 + 抓取时统一换行。
+  2. 升级问题首次运行时，#7472 的标题与报错原文**完全相同**，加上标题在嵌入文本里重复两次，导致 v2 组 4 个名额全被这一个 Issue 占据——而它恰好是“根因不同”的案例，迁移指南被挤出。修正：嵌入文本去掉重复标题；组装上下文时每文档最多 2 块（只影响上下文选择，不改变检索排名，devcheck 结果不变）。修正后 v2 组为：#7472 ×2、迁移指南、#6777。
+- **验证：** 67 个测试通过（含 AT-07 分组、AT-10 仅相似 Issue 不断言根因、冲突、范围版本）。devcheck 三个题集结果不变（u02 4/4、u05 6/6、u06 9/10，错误版本块 0）。
+- **限制：** 5 个 Issue 远少于 PRD 规划的 30–50 个；真实数据中**没有**已标注的文档冲突，冲突机制只由测试夹具验证；mock 只抽取首句，无法真正“比较”两组证据。

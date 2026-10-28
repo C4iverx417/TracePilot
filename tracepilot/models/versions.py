@@ -51,6 +51,34 @@ def parse_version(raw: str, covered: Sequence[str]) -> VersionChoice:
     return VersionChoice("unsupported", raw=text, reason=f"Version {text} is not covered by the knowledge base")
 
 
+_CONSTRAINT = re.compile(r"^(>=|<=|>|<|==)(\d+(?:\.\d+){0,2})$")
+
+
+def _as_tuple(version: str) -> tuple:
+    return tuple(int(p) for p in (version.split(".") + ["0", "0"])[:3])
+
+
+def in_range(version: str, spec: str) -> bool:
+    """spec like '>=2.0.0,<3.0.0'. All constraints must hold."""
+    v = _as_tuple(version)
+    for part in spec.split(","):
+        match = _CONSTRAINT.match(part.strip())
+        if not match:
+            raise ValueError(f"Bad version range constraint {part!r}")
+        op, bound = match.group(1), _as_tuple(match.group(2))
+        ok = {">=": v >= bound, "<=": v <= bound, ">": v > bound, "<": v < bound, "==": v == bound}[op]
+        if not ok:
+            return False
+    return True
+
+
 def scope_matches(version_scope: str, version: str) -> bool:
-    """Exact-version chunks match only their version; 'general' content was hand-marked as cross-version."""
-    return version_scope == f"exact:{version}" or version_scope == "general"
+    """exact:X matches only X; range:SPEC was hand-checked; 'general' was hand-marked as cross-version.
+    'unknown' never matches: it cannot support a version-sensitive conclusion (PRD 6.4 rule 5)."""
+    if version_scope == "general":
+        return True
+    if version_scope.startswith("exact:"):
+        return version_scope == f"exact:{version}"
+    if version_scope.startswith("range:"):
+        return in_range(version, version_scope[len("range:"):])
+    return False

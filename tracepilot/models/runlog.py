@@ -27,18 +27,22 @@ def answer_record(run_id: str, answer: Answer, extra: Dict[str, Any] | None = No
         "question": answer.question,
         "outcome": answer.outcome,
         "target_version": answer.target_version,
+        "compare_versions": answer.compare_versions,
         "model": answer.model,
         "latency_ms": answer.latency_ms,
         "usage": dataclasses.asdict(answer.usage),
         "estimated_cost_usd": None,  # price unknown -> null, never 0 (PRD FR-11)
         "retrieved": [
-            {"id": cid, "chunk_id": h.chunk.chunk_id, "score": round(h.score, 4), "version": h.chunk.version_scope}
+            {"id": cid, "chunk_id": h.chunk.chunk_id, "score": round(h.score, 4), "version": h.chunk.version_scope,
+             "group": answer.groups.get(cid), "channels": list(h.channels)}
             for cid, h in answer.evidence.items()
         ],
         "answer": answer.draft.model_dump(),
         "citations": [dataclasses.asdict(c) for c in answer.citations],
         "invalid_citation_ids": answer.invalid_citation_ids,
         "unsupported_claims": answer.unsupported_claims,
+        "historical_cases": [f.model_dump() for f in answer.historical_cases],
+        "conflicts": answer.conflicts,
         "suspicious_evidence_ids": answer.suspicious_evidence_ids,
         "notes": answer.notes,
         **(extra or {}),

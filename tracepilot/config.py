@@ -48,6 +48,7 @@ class Settings:
     top_k: int
     retrieval: str
     candidates: int
+    per_document: int
     project_path: Path
     # repr=False: printing Settings never shows the key.
     api_key: Optional[str] = field(default=None, repr=False)
@@ -119,6 +120,7 @@ def load_settings(env: Optional[Dict[str, str]] = None, dotenv_path: Optional[Pa
         top_k=_get_positive_int(env, "TRACEPILOT_TOP_K", 8),  # PRD FR-04: at most 8 chunks reach the model
         retrieval=retrieval,
         candidates=_get_positive_int(env, "TRACEPILOT_CANDIDATES", 20),  # per retriever, before fusion
+        per_document=_get_positive_int(env, "TRACEPILOT_PER_DOCUMENT", 2),  # context diversity cap
         project_path=Path(env.get("TRACEPILOT_PROJECT", "data/sources/pydantic/project.json")),
         api_key=api_key,
     )

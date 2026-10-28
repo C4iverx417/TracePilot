@@ -16,7 +16,7 @@ from collections import Counter
 from typing import Dict, Iterable, List, Optional
 
 from .documents import Chunk, SearchHit, SourceDocument
-from .retrieval import validate_query
+from .retrieval import location_text, validate_query
 from .versions import scope_matches
 
 _TOKEN = re.compile(r"[a-z0-9_]+")
@@ -42,7 +42,7 @@ class KeywordRetriever:
             if chunk.chunk_id in self._chunks:
                 continue
             doc = self._documents[chunk.document_id]
-            tokens = tokenize(" ".join((doc.title,) + chunk.heading_path) + "\n" + chunk.content)
+            tokens = tokenize(location_text(chunk, doc) + "\n" + chunk.content)
             self._chunks[chunk.chunk_id] = chunk
             self._tf[chunk.chunk_id] = Counter(tokens)
             self._length[chunk.chunk_id] = len(tokens)

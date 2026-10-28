@@ -115,13 +115,25 @@ def render_context(messages) -> str:
 
 def render_answer(answer: Answer, run_path: str | None = None) -> str:
     d = answer.draft
-    version = f"   version: {answer.target_version}" if answer.target_version else ""
+    if answer.compare_versions:
+        version = f"   upgrade: {answer.compare_versions[0]} -> {answer.compare_versions[1]}"
+    else:
+        version = f"   version: {answer.target_version}" if answer.target_version else ""
     lines = [f"[{OUTCOME_LABELS.get(d.outcome, d.outcome.upper())}]{version}", "", d.summary, ""]
     if d.findings:
         lines.append("Findings (from the documentation):")
         for f in d.findings:
             refs = " ".join(f"[{c}]" for c in f.citation_ids)
             lines.append(f"  - {f.text} {refs}")
+        lines.append("")
+    if answer.historical_cases:
+        lines.append("Similar historical cases (someone else's issue - verify before assuming the same cause):")
+        for f in answer.historical_cases:
+            lines.append(f"  ~ {f.text} " + " ".join(f"[{c}]" for c in f.citation_ids))
+        lines.append("")
+    if answer.conflicts:
+        lines.append("Conflicting sources:")
+        lines += [f"  x {c}" for c in answer.conflicts]
         lines.append("")
     for title, items in (("Hypotheses (unverified):", d.hypotheses), ("Steps:", d.steps),
                          ("Missing information:", d.missing_information)):
@@ -131,9 +143,17 @@ def render_answer(answer: Answer, run_path: str | None = None) -> str:
             lines.append("")
     if answer.citations:
         lines.append("Citations:")
-        for c in answer.citations:
-            lines.append(f"  [{c.id}] {c.title} > {' > '.join(c.heading_path) or '(intro)'}  ({c.version_scope})")
-            lines.append(f"       {c.url}  {c.locator}")
+        groups = [None] if not answer.compare_versions else list(answer.compare_versions)
+        for group in groups:
+            members = [c for c in answer.citations if c.group == group]
+            if group and members:
+                lines.append(f"  -- version {group} --")
+            for c in members:
+                path = c.heading_path[1:] if c.heading_path and c.heading_path[0] == c.title else c.heading_path
+                lines.append(f"  [{c.id}] {' > '.join((c.title,) + path)}  ({c.version_scope})")
+                lines.append(f"       {c.url}  {c.locator}")
+                if c.issue_status:
+                    lines.append(f"       issue resolution: {c.issue_status} by {c.issue_resolved_by} - {c.issue_resolution}")
         lines.append("")
     if answer.unsupported_claims:
         lines.append("Not supported by the evidence (shown for transparency, not as fact):")
