@@ -6,13 +6,19 @@ implementations themselves (dependency inversion, PRD 10.3).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from langchain_core.embeddings import DeterministicFakeEmbedding, Embeddings
+from langchain_core.language_models import BaseChatModel
 
 from .config import Settings
 from .models.chunking import MarkdownChunker
 from .models.embeddings import FastEmbedEmbeddings
 from .models.llm import ChatModel, MockClient, OpenAICompatibleClient
+from .models.mock_chat import ExtractiveMockChatModel
+from .models.rag import RagPipeline
 from .models.retrieval import VectorRetriever
+from .models.runlog import RunLog
 from .models.sources import load_snapshot
 
 
@@ -36,3 +42,27 @@ def build_retriever(settings: Settings, embeddings: Embeddings | None = None) ->
     retriever = VectorRetriever(embeddings or build_embeddings(settings))
     retriever.index(documents, chunks)
     return retriever
+
+
+def build_langchain_chat(settings: Settings) -> BaseChatModel:
+    if settings.provider == "mock":
+        return ExtractiveMockChatModel()
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(
+        model=settings.model,
+        base_url=settings.base_url,
+        api_key=settings.api_key,
+        temperature=settings.temperature,
+        max_tokens=settings.max_tokens,
+        timeout=settings.timeout_s,
+        max_retries=0,  # retries are a workflow decision (PRD 9.3), not hidden in the client
+    )
+
+
+def build_rag(settings: Settings, retriever: VectorRetriever | None = None) -> RagPipeline:
+    return RagPipeline(retriever or build_retriever(settings), build_langchain_chat(settings), k=settings.top_k)
+
+
+def build_run_log() -> RunLog:
+    return RunLog(Path("var/runs"))

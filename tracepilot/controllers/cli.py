@@ -3,6 +3,7 @@
     tracepilot ask "question"            U01: send one question to the chat model
     tracepilot search ["question"]       U02: show the most similar source chunks
     tracepilot devcheck                  U02: run the labelled development questions
+    tracepilot answer "question"         U03: retrieve, generate, show cited answer
 """
 
 from __future__ import annotations
@@ -11,12 +12,13 @@ import argparse
 import json
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import List, Optional
 
 from .. import app
 from ..config import ConfigError, Settings, load_settings
-from ..models import dev_eval
+from ..models import dev_eval, runlog
 from ..models.llm import ModelError, build_messages, build_payload
 from ..models.retrieval import VectorRetriever
 from ..models.sources import SourceError
@@ -96,6 +98,22 @@ def cmd_devcheck(args, settings: Settings) -> int:
     return 0
 
 
+def cmd_answer(args, settings: Settings) -> int:
+    question = validate_question(args.question)
+    if args.k:
+        settings = replace(settings, top_k=args.k)
+    pipeline = app.build_rag(settings, _build_index(settings))
+    evidence, messages = pipeline.prepare(question)
+    if args.show_context:
+        print(cli_view.render_context(messages))
+        print()
+    answer = pipeline.generate(question, evidence, messages)
+    run_id = runlog.new_run_id()
+    path = app.build_run_log().save(runlog.answer_record(run_id, answer))
+    print(cli_view.render_answer(answer, str(path)))
+    return 0
+
+
 # ---------------------------------------------------------------- entry point
 
 def build_parser() -> argparse.ArgumentParser:
@@ -116,6 +134,11 @@ def build_parser() -> argparse.ArgumentParser:
     check = sub.add_parser("devcheck", help="Run the labelled U02 development questions.")
     check.add_argument("-k", type=int, help="Top-k to evaluate (default TRACEPILOT_TOP_K).")
     check.set_defaults(handler=cmd_devcheck)
+    answer = sub.add_parser("answer", help="Answer a question from the documentation, with citations.")
+    answer.add_argument("question")
+    answer.add_argument("-k", type=int, help="How many chunks to give the model (default TRACEPILOT_TOP_K).")
+    answer.add_argument("--show-context", action="store_true", help="Print the exact prompt sent to the model.")
+    answer.set_defaults(handler=cmd_answer)
     return parser
 
 

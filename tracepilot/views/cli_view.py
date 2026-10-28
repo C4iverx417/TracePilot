@@ -6,6 +6,7 @@ from __future__ import annotations
 import textwrap
 from typing import List
 
+from ..models.answering import Answer
 from ..models.dev_eval import DevResult
 from ..models.documents import SearchHit
 from ..models.llm import ChatResult
@@ -86,4 +87,55 @@ def render_dev_results(results: List[DevResult], k: int) -> str:
     passed = sum(r.passed for r in graded)
     lines.append(f"{passed}/{len(graded)} answerable questions found their labelled section in the top-{k}.")
     lines.append("This is a 5-question sanity check, not an accuracy measurement.")
+    return "\n".join(lines)
+
+
+OUTCOME_LABELS = {
+    "answered": "ANSWERED",
+    "partially_answered": "PARTIALLY ANSWERED",
+    "insufficient_evidence": "INSUFFICIENT EVIDENCE - the knowledge base does not cover this",
+}
+
+
+def render_context(messages) -> str:
+    parts = []
+    for m in messages:
+        parts.append(f"===== {m.type.upper()} =====\n{m.content}")
+    return "\n\n".join(parts)
+
+
+def render_answer(answer: Answer, run_path: str | None = None) -> str:
+    d = answer.draft
+    lines = [f"[{OUTCOME_LABELS.get(d.outcome, d.outcome.upper())}]", "", d.summary, ""]
+    if d.findings:
+        lines.append("Findings (from the documentation):")
+        for f in d.findings:
+            refs = " ".join(f"[{c}]" for c in f.citation_ids) or "[! no valid citation - treat as unsupported]"
+            lines.append(f"  - {f.text} {refs}")
+        lines.append("")
+    for title, items in (("Hypotheses (unverified):", d.hypotheses), ("Steps:", d.steps),
+                         ("Missing information:", d.missing_information)):
+        if items:
+            lines.append(title)
+            lines += [f"  {i}. {item}" for i, item in enumerate(items, start=1)]
+            lines.append("")
+    if answer.citations:
+        lines.append("Citations:")
+        for c in answer.citations:
+            lines.append(f"  [{c.id}] {c.title} > {' > '.join(c.heading_path) or '(intro)'}  ({c.version_scope})")
+            lines.append(f"       {c.url}  {c.locator}")
+        lines.append("")
+    if answer.invalid_citation_ids:
+        lines.append(f"! Removed citation ids not present in the evidence: {', '.join(answer.invalid_citation_ids)}")
+    for note in answer.notes:
+        lines.append(f"! {note}")
+    u = answer.usage
+    lines += [
+        "---",
+        f"model: {answer.model}   latency: {answer.latency_ms} ms   evidence: {len(answer.evidence)} chunks",
+        f"tokens: in={_fmt(u.prompt_tokens)} out={_fmt(u.completion_tokens)}"
+        + (f" ({u.source})" if u.source else "") + "   cost: unknown",
+    ]
+    if run_path:
+        lines.append(f"run record: {run_path}")
     return "\n".join(lines)
