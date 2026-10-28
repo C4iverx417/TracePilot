@@ -14,7 +14,8 @@ U01、U02 按旧流程交付了学习交接卡（见下方），予以保留。
 | U07 | 已验证 | `upgrade --from --to`：两版本分别检索、分组呈现；5 个人工筛选的真实 Issue（GitHub 角色 + 解决证据）；文档事实 / 历史案例分离；冲突机制；每文档最多 2 块 |
 | U08 | 已验证 | LangGraph 状态图：check_input → retrieve → assess →（补检索 / generate）→ finish；预算：3 轮检索、8 次调用、1 次格式修复、2 次瞬时重试、60 秒；`--trace` |
 | U09 | 已验证 | `tracepilot chat`：内存会话；Session / Episode / Run；最多 2 轮澄清、每次 ≤3 个字段；显式版本优先；改版本即按新版本重新检索；会话隔离 |
-| U10–U15 | 未开始 | |
+| U10 | 已验证 | FastAPI：202 + 轮询；后台线程池（最多 3 并发）；每会话 1 个活动任务（409）；episode 校验；引用详情；统一错误体 |
+| U11–U15 | 未开始 | |
 
 ---
 
@@ -240,3 +241,11 @@ manifest.json + snapshot/*.md → load_snapshot (校验 SHA-256) → SourceDocum
 - **上下文预算：** 工作流只收到 `compose_query` 生成的紧凑查询（原问题 + 错误原文 + 最近 2 条补充，去掉版本陈述，≤2000 字符），从不拼接完整对话历史。
 - **验证：** 88 个测试通过（AT-04 不猜版本、AT-05 两轮后停止、AT-12 改版本后证据全部来自新版本、AT-13 两个会话互不影响、显式选择优先、新问题重置计数但保留所选版本）。CLI 演示：“程序启动失败” → 问版本 + 错误原文 → “我用的是 2.14.1” → 只再问错误原文 → 贴错误 → 回答引用迁移指南并把 #6777 列为历史案例。
 - **限制：** 会话只在内存中，**退出进程即丢失**（U13 持久化）；条件提取与“含糊”判断是确定性规则，不用模型，覆盖面有限；环境字段已建模但尚未提取。
+
+### U10 —— 用户能通过 API 完成一次排查（已验证）
+
+- **新增：** `controllers/api.py`（FastAPI 路由与错误映射）、`views/api_schemas.py`（请求/响应 schema 与映射函数，HTTP 契约集中在一处）、`models/runs.py`（`RunRegistry` 加锁的运行登记、`RunExecutor` 线程池执行、`STAGES` 节点 → 用户可见阶段）、`SupportWorkflow.run(on_progress=)`（用 LangGraph `stream(stream_mode="values")` 在每个节点完成后上报真实进度）、`app.build_api_context`、`tracepilot serve`（默认只绑定 127.0.0.1）。
+- **接口：** `GET /health`、`GET /api/v1/projects/current`、`POST /api/v1/sessions`、`GET /api/v1/sessions/{id}`、`POST /api/v1/sessions/{id}/episodes`、`POST /api/v1/sessions/{id}/runs`（202 + `status_url`）、`GET /api/v1/runs/{id}`、`GET /api/v1/runs/{id}/citations/{cid}`。交互式文档在 `/docs`。
+- **错误：** 统一为 `{"error": {"code", "message", "run_id"}}`：422 `INVALID_INPUT`（空问题、超长、非法版本、日志 > 20,000 字符）、404 `NOT_FOUND`、409 `RUN_IN_PROGRESS`（附现有 run_id）、409 `EPISODE_MISMATCH`（只能针对当前问题提交）。模型故障 → run `status=failed` + 错误码，`outcome` 为空，不伪装成“没有资料”。引用详情只对**本次 run 已校验的引用**开放。
+- **验证：** 95 个测试通过（用一个可控阻塞的假模型：模型阻塞时轮询 < 1 秒返回、同会话第二次提交 409 而其他会话不受影响、澄清走 HTTP、过期 episode、5 类非法输入、鉴权失败 → failed）。另用 curl 对真实服务（真实 embedding + mock 模型）走通：建会话 → 含糊问题 → awaiting_input → 补充版本与错误日志 → completed、引用详情、伪造引用 404。
+- **限制：** 运行登记与会话都在内存中，**服务重启即丢失**（U13）；没有取消和幂等键（U14）；无身份认证，只适合本机。

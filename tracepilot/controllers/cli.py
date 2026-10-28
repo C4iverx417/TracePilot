@@ -6,6 +6,7 @@
     tracepilot answer "question" --version 2.14.1   U03-U05: version-filtered retrieval + cited answer
     tracepilot upgrade "error" --from 1.10 --to 2.14  U07: per-version evidence, migration steps
     tracepilot chat                                  U09: multi-turn diagnosis with clarification
+    tracepilot serve                                 U10: HTTP API on http://127.0.0.1:8000 (docs at /docs)
 """
 
 from __future__ import annotations
@@ -242,6 +243,17 @@ def cmd_chat(args, settings: Settings) -> int:
         print(cli_view.render_turn(result))
 
 
+def cmd_serve(args, settings: Settings) -> int:
+    import uvicorn
+
+    from .api import create_app
+
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        print("warning: binding beyond localhost exposes an unauthenticated service (PRD NFR-06)", file=sys.stderr)
+    uvicorn.run(create_app(lambda: app.build_api_context(settings)), host=args.host, port=args.port)
+    return 0
+
+
 # ---------------------------------------------------------------- entry point
 
 def build_parser() -> argparse.ArgumentParser:
@@ -292,6 +304,11 @@ def build_parser() -> argparse.ArgumentParser:
     chat.add_argument("--version", help="Pre-select a version for this session.")
     chat.add_argument("--retrieval", choices=SUPPORTED_RETRIEVAL, help="Override TRACEPILOT_RETRIEVAL.")
     chat.set_defaults(handler=cmd_chat)
+
+    serve = sub.add_parser("serve", help="Run the HTTP API (FastAPI) on localhost.")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
+    serve.set_defaults(handler=cmd_serve)
     return parser
 
 

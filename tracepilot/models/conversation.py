@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from .answering import Answer
 from .rag import no_call_answer
@@ -92,6 +92,9 @@ class ConversationService:
 
     # ------------------------------------------------------------ sessions and episodes
 
+    def resolve_version(self, raw: str):
+        return parse_version(raw, self.covered_versions)
+
     def new_session(self, version: Optional[str] = None) -> Session:
         session = self.store.create(self.project_id)
         if version:
@@ -111,10 +114,11 @@ class ConversationService:
 
     # ------------------------------------------------------------ one user message
 
-    def submit(self, session_id: str, text: str, version: Optional[str] = None) -> TurnResult:
+    def submit(self, session_id: str, text: str, version: Optional[str] = None,
+               run_id: Optional[str] = None, on_progress: Optional[Callable[[str], None]] = None) -> TurnResult:
         session = self.store.get(session_id)
         episode = session.current
-        run_id = _id("run")
+        run_id = run_id or _id("run")
         notes: List[str] = []
 
         if not episode.question:
@@ -157,7 +161,7 @@ class ConversationService:
         if "error_text" in missing:
             notes.append("Answering without the exact error text; results may be broad.")
 
-        state = self.workflow.run(compose_query(episode), episode.confirmed.version or "unknown")
+        state = self.workflow.run(compose_query(episode), episode.confirmed.version or "unknown", on_progress)
         if state.get("error_code"):
             result = TurnResult(session.session_id, episode.episode_id, run_id, "failed",
                                 error_code=state["error_code"], error=state["error"], state=state, notes=notes)

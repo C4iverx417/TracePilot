@@ -21,7 +21,8 @@ from .models.mock_chat import ExtractiveMockChatModel
 from .models.rag import RagPipeline
 from .models.keyword import KeywordRetriever
 from .models.retrieval import HybridRetriever, Retriever, VectorRetriever
-from .models.runlog import RunLog
+from .models.runlog import RunLog, answer_record, workflow_extra
+from .models.runs import RunExecutor, RunRegistry
 from .models.workflow import Budget, SupportWorkflow
 from .models.conversation import ConversationService
 from .models.sessions import InMemorySessionStore, SessionStore
@@ -120,3 +121,30 @@ def build_conversation(settings: Settings, store: SessionStore | None = None,
     pipeline = build_rag(settings, index.retriever, index.project)
     return ConversationService(store or InMemorySessionStore(), build_workflow(settings, pipeline),
                                index.project.versions, index.project.project_id)
+
+
+@dataclass
+class ApiContext:
+    project: Project
+    service: ConversationService
+    registry: RunRegistry
+    executor: RunExecutor
+
+
+def build_api_context(settings: Settings, index: KnowledgeIndex | None = None,
+                      store: SessionStore | None = None) -> ApiContext:
+    index = index or build_index(settings)
+    service = build_conversation(settings, store, index)
+    registry = RunRegistry()
+    run_log = build_run_log()
+
+    def log_run(record):
+        result = record.result
+        if result and result.answer:
+            data = answer_record(record.run_id, result.answer, workflow_extra(result.state) if result.state else {})
+        else:
+            data = {"run_id": record.run_id, "status": record.status, "error_code": record.error_code}
+        data.update({"session_id": record.session_id, "episode_id": record.episode_id, "status": record.status})
+        run_log.save(data)
+
+    return ApiContext(index.project, service, registry, RunExecutor(service, registry, on_done=log_run))

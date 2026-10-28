@@ -133,14 +133,22 @@ class SupportWorkflow:
         g.add_edge("finish", END)
         return g.compile()
 
-    def run(self, question: str, raw_version: str) -> WorkflowState:
+    def run(self, question: str, raw_version: str,
+            on_progress: Optional[Callable[[str], None]] = None) -> WorkflowState:
+        """Run the graph. `on_progress(node)` is called after each node finishes, which is what
+        the API reports as the run's real progress (PRD FR-10) - never the model's reasoning."""
         initial: WorkflowState = {
             "question": question, "raw_version": raw_version, "query": question, "query_variants": [question],
-            "pool": {}, "pool_order": {}, "relevant": [], "retrieval_rounds": 0, "model_calls": 0, "usage_in": 0, "usage_out": 0,
-            "usage_known": True, "assessment": None, "answer": None, "end_reason": "", "error_code": None,
-            "error": None, "started": self.clock(), "trace": [],
+            "pool": {}, "pool_order": {}, "relevant": [], "retrieval_rounds": 0, "model_calls": 0,
+            "usage_in": 0, "usage_out": 0, "usage_known": True, "assessment": None, "answer": None,
+            "end_reason": "", "error_code": None, "error": None, "started": self.clock(), "trace": [],
         }
-        return self.graph.invoke(initial)
+        final: WorkflowState = initial
+        for state in self.graph.stream(initial, stream_mode="values"):
+            final = state
+            if on_progress and state.get("trace"):
+                on_progress(state["trace"][-1]["node"])
+        return final
 
     # ------------------------------------------------------------ helpers
 
