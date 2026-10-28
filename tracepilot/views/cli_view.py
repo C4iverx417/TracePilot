@@ -110,7 +110,7 @@ def render_answer(answer: Answer, run_path: str | None = None) -> str:
     if d.findings:
         lines.append("Findings (from the documentation):")
         for f in d.findings:
-            refs = " ".join(f"[{c}]" for c in f.citation_ids) or "[! no valid citation - treat as unsupported]"
+            refs = " ".join(f"[{c}]" for c in f.citation_ids)
             lines.append(f"  - {f.text} {refs}")
         lines.append("")
     for title, items in (("Hypotheses (unverified):", d.hypotheses), ("Steps:", d.steps),
@@ -124,6 +124,10 @@ def render_answer(answer: Answer, run_path: str | None = None) -> str:
         for c in answer.citations:
             lines.append(f"  [{c.id}] {c.title} > {' > '.join(c.heading_path) or '(intro)'}  ({c.version_scope})")
             lines.append(f"       {c.url}  {c.locator}")
+        lines.append("")
+    if answer.unsupported_claims:
+        lines.append("Not supported by the evidence (shown for transparency, not as fact):")
+        lines += [f"  ? {claim}" for claim in answer.unsupported_claims]
         lines.append("")
     if answer.invalid_citation_ids:
         lines.append(f"! Removed citation ids not present in the evidence: {', '.join(answer.invalid_citation_ids)}")

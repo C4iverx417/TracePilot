@@ -66,6 +66,8 @@ class Answer:
     model: str
     latency_ms: int
     usage: Usage
+    unsupported_claims: List[str] = field(default_factory=list)
+    suspicious_evidence_ids: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
 
     @property

@@ -8,7 +8,8 @@ U01、U02 按旧流程交付了学习交接卡（见下方），予以保留。
 | U01 | 已验证 | 生成模型暂用 mock；U02 中按 MVC 重组：`llm.py` → `models/llm.py`，`cli.py` 拆成 `controllers/cli.py` + `views/cli_view.py`，命令改为 `tracepilot ask` |
 | U02 | 已验证 | 目标项目 Pydantic v2.14.1；本地 embedding（fastembed + multilingual MiniLM）；内存向量检索 |
 | U03 | 已验证 | 基础 RAG：检索 → 提示词（证据块 + 规则）→ LangChain chat model → Pydantic schema 解析 → 引用校验；mock 为抽取式假模型 |
-| U04–U15 | 未开始 | |
+| U04 | 已验证 | 服务端确定性规则决定 outcome（answered / partially_answered / insufficient_evidence）；无检索结果不调用模型；可疑指令型资料标记；输出脱敏 |
+| U05–U15 | 未开始 | |
 
 ---
 
@@ -175,3 +176,10 @@ manifest.json + snapshot/*.md → load_snapshot (校验 SHA-256) → SourceDocum
 - **验证：** 34 个测试通过。mock 下：“immutable” 问题（k=8）引用 Models > Faux immutability；V1→V2 validator 问题引用两段 Changes to validators；Django CORS 返回 insufficient_evidence。
 - **调试记录：** 证据块属性 `source="Models > ..."` 中的 `>` 曾让 mock 的正则提前截断，导致全部误判为证据不足；已修正正则。
 - **限制：** mock 只按词重叠抽取首句，回答质量无意义；真实模型未验证。成本记录为 null（未知价格不计 0）。
+
+### U04 —— 用户能知道资料不足以回答（已验证）
+
+- **新增：** `models/guards.py`：`enforce_outcome`（无有效引用的结论移出 findings；answered 中有无支持内容 → partially_answered；一条有支持的都没有 → insufficient_evidence）、`suspicious_evidence`（正则识别“忽略之前指令 / 泄露密钥 / 执行命令”等文本）、`redact_secrets`（`sk-…`、`ghp_…`、`AKIA…`）。`RagPipeline.generate` 在检索为空时直接返回 insufficient_evidence，不调用模型。
+- **关键设计：** 模型自报的 outcome 只能被服务端**降级**，不能升级；“引用存在”由代码校验，“引用是否真的支持结论”仍需人工或评估（U15）。提示词规则 3 要求把资料中的指令当作内容描述。
+- **验证：** 42 个测试通过，固定样例：可回答 → answered 且有引用；知识库外 → insufficient_evidence 且无引用；恶意资料 → 被标记、输出提示“treated as data”。另测：模型捏造 `c99` 的“answered”被降级为 insufficient_evidence。
+- **限制：** 指令识别是关键词正则，只能覆盖常见写法；mock 仍可能把恶意句子当作“文档内容”引用（描述而非执行），真实模型的遵守情况未验证。仅一次检索，不补检索（U08）。

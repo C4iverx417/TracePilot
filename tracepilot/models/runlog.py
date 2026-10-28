@@ -37,6 +37,8 @@ def answer_record(run_id: str, answer: Answer, extra: Dict[str, Any] | None = No
         "answer": answer.draft.model_dump(),
         "citations": [dataclasses.asdict(c) for c in answer.citations],
         "invalid_citation_ids": answer.invalid_citation_ids,
+        "unsupported_claims": answer.unsupported_claims,
+        "suspicious_evidence_ids": answer.suspicious_evidence_ids,
         "notes": answer.notes,
         **(extra or {}),
     }
